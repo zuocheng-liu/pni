@@ -1,4 +1,2 @@
-PHP-Hessian-Ext
+pni
 ===============
-
-a PHP Hessian Extension with C
