@@ -33,7 +33,7 @@ As all PHPers known, It is a tranditional way to call C/C++ that to write PHP ex
 
 - Reduce maintenance cost
 
-It's dangerous to restart the PHP service when we install or update a new PHP extension, especially while operating the PHP cluster. But with PNI, we just change the local interface library.
+It's a risk of restarting the PHP service when install or update a new PHP extension, especially while operating the PHP cluster. But with PNI, we just change the local interface library.
 
 - Reduce development cost
 
