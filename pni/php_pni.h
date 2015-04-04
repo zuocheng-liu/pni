@@ -44,16 +44,17 @@ PHP_RINIT_FUNCTION(pni);
 PHP_RSHUTDOWN_FUNCTION(pni);
 PHP_MINFO_FUNCTION(pni);
 
-//typedef void (*NATIVE_INTERFACE)(int *p);
 /* 
     Declare any global variables you may need between the BEGIN
     and END macros here:     
+*/
+#define PHP_DL_HANDLE_RES_NAME "DL Handle"
+#define MAX_PNI_FUNCTION_PARAMS 255
+typedef zval *(*NATIVE_INTERFACE)(zval **args);
 
 ZEND_BEGIN_MODULE_GLOBALS(pni)
-    long  global_value;
-    char *global_string;
+    void *dlHandle;
 ZEND_END_MODULE_GLOBALS(pni)
-*/
 
 /* In every utility function you add that needs to use variables 
    in php_pni_globals, call TSRMLS_FETCH(); after declaring other 
