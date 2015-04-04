@@ -86,13 +86,17 @@ phpni -lm -o libpnimath.so pni_math.c
 
 ```php
 // file testPni.php
-$pniFunction = new PNIFunction('PNI_pow','libpnimath.so');
-$a = 2.0;
-$b = 2.5;
-var_dump($pniFunction->invokeArgs(array($a, $b)));
-var_dump($pniFunction->invoke($a, $b));
-var_dump($pniFunction->getLibName());
-var_dump($pniFunction->getFunctionName());
+<?php
+try {
+    $pni = new PNI('libpnimath.so');
+    var_dump($pni->PNI_pow(2.0,6.0));
+    $noPni = new PNI('/unexisted/library.so');
+    var_dump($pni->unDefinedFunction(2.0,6.0));
+} catch (PNIException $e) {
+    var_dump($e->getMessage());
+    var_dump($e->getTraceAsString());
+}
+
 ```
 ### 4.Run the PHP script
 
@@ -103,10 +107,10 @@ $ php testPni.php
 the output
 
 ```shell
-float(5.6568542494924)
-float(5.6568542494924)
-string(13) "libpnimath.so"
-string(7) "PNI_pow"
+float(64)
+string(154) "Dlopen /unexisted/library.so error (/unexisted/library.so: cannot open shared object file: No such file or directory),  dl handle resource is not created."
+string(69) "#0 /root/pni.php(5): PNI->__construct('/unexisted/libr...')
+#1 {main}"
 ```
 
 ## Requirements
