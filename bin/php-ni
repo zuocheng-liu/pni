@@ -1,1 +1,15 @@
+#!/bin/sh
+
+# Variable declaration
+prefix='/usr'
+includedir="$prefix/include/php5"
+CC='gcc'
+
+${CC} -shared -fPIC -I${includedir} \
+    -I${includedir}/main \
+    -I${includedir}/TSRM \
+    -I${includedir}/Zend \
+    -I${includedir}/ext \
+    $*
+
 

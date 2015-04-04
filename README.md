@@ -80,9 +80,9 @@ zval *PNI_pow(zval **args) {
 ### 2.Create the shared library file
 
 ```shell
-phpni -lm -o libpnimath.so pni_math.c
+php-ni -lm -o libpnimath.so pni_math.c
 ```
-### 3.Create PHP Code
+### 3.Create PHP code
 
 ```php
 // file testPni.php
