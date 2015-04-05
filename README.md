@@ -54,31 +54,36 @@ Increasing native interface has no effect on current PHP service.
 
 ## Pitfalls
 
-## Examples
+## Tutorial & Examples
+
+
 
 ### 1.Write the C/C++ code
 ```C++
 // file pni_math.c
 #include<math.h>
 #include "php.h"
-zval *PNI_pow(zval **args) {
+
+/* 
+ * double pow(double x, double y); 
+ */
+zval *PNI_pow(zval **args) {  // every PNI function returns zval(php variable) , the params are in the args
     double x,y,z;
-    zval *tmp = NULL; 
-    zval *res = NULL; 
-    tmp = args[0];
-    x = Z_DVAL_P(tmp);
+    zval *tmp = NULL;
+    zval *res = NULL;
+    tmp = args[0];     
+    x = Z_DVAL_P(tmp);  // get the double value via Z_DVAL_P
     tmp = args[1];
     y = Z_DVAL_P(tmp);
     
     z = pow(x,y);
     
-    ALLOC_INIT_ZVAL(res);
-    ZVAL_DOUBLE(res, z);
+    ALLOC_INIT_ZVAL(res);  //  It essential to init return value unless the return value is NULL.
+    ZVAL_DOUBLE(res, z);   // Use ZVAL_DOUBLE to assign the result to the return variable， the data type is double.
     return res;
 }
 ```
-### 2.Create the shared library file
-
+### 2.Create the shared library file and move it to the directory which `$LD_LIBRARY_PATH` contains.
 ```shell
 php-ni -lm -o libpnimath.so pni_math.c
 ```
@@ -104,7 +109,7 @@ try {
 $ php testPni.php 
 ```
 
-the output
+the output as below
 
 ```shell
 float(64)
