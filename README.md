@@ -25,7 +25,7 @@ PNI allows you to use native code when an application cannot be written entirely
 - You want to implement time-critical code in a lower-level, faster programming language.
 - You have legacy code or code libraries that you want to access from PHP programs.
 - You need platform-dependent features not supported in PHP.
-- You want to call other language interface such as C/C++, Python, R etc.
+- You want to call other language interface such as C/C++ assemble etc.
 
 ### Compared with PHP Extension
 
@@ -67,18 +67,17 @@ Increasing native interface has no effect on current PHP service.
 /* 
  * double pow(double x, double y); 
  */
-zval *PNI_pow(zval **args) {  // every PNI function returns zval(php variable) , the params are in the args
+zval *PNI_pow(zval **args) {  // every PNI function returns zval(php variable) , the paramters are in the args
     double x,y,z;
     zval *tmp = NULL;
     zval *res = NULL;
     tmp = args[0];     
     x = Z_DVAL_P(tmp);  // get the double value via Z_DVAL_P
     tmp = args[1];
-    y = Z_DVAL_P(tmp);
+    y = Z_DVAL_P(tmp); // Why we write it like this instead of `y = Z_DVAL_P(args[1]);`? It's a C Trap.
     
-    z = pow(x,y);
-    
-    ALLOC_INIT_ZVAL(res);  //  It essential to init return value unless the return value is NULL.
+    z = pow(x,y);    // 
+    ALLOC_INIT_ZVAL(res);  //  It's essential to init return value unless the return value is NULL.
     ZVAL_DOUBLE(res, z);   // Use ZVAL_DOUBLE to assign the result to the return variable， the data type is double.
     return res;
 }
@@ -117,6 +116,33 @@ string(154) "Dlopen /unexisted/library.so error (/unexisted/library.so: cannot o
 string(69) "#0 /root/pni.php(5): PNI->__construct('/unexisted/libr...')
 #1 {main}"
 ```
+
+### How to get data from zval?
+
+All the operator macros are defined in the Zend APIs. 
+
+```c
+Z_LVAL_P(zval_p)   // get Long(no int)
+Z_BVAL_P(zval_p)   // get Boolean
+Z_DVAL_P(zval_p)   // get Double
+Z_STRVAL_P(zval_p) // get char *
+Z_STRLEN_P(zval_p) // get the length of a string / Long
+```
+### How to assign a value to the return variable
+
+Thus the PNI function return variable is zval,first of all, you need to initialise it by using  `ALLOC_INIT_ZVAL(res)`. And then, assign the value to it.
+
+```
+ZVAL_NULL(z)      // assign NULL
+ZVAL_LONG(z, l)    // assign LONG
+ZVAL_STRING(z, s, duplicate)     //assign a string/char * . Duplicate ? allways be 1.
+ZVAL_STRINGL(z, s, l, duplicate) //assign a string with fixed length. Duplicate ? the same as above.
+ZVAL_FALSE(z)
+ZVAL_TRUE(z)
+ZVAL_BOOL(z, boolean)    // ZVAL_BOOL(z, 1) and ZVAL_TRUE(z) are the same.Likely, ZVAL_BOOL(z, 0) and ZVAL_FALSE(z) are the same.
+```
+
+That's All. It's unnecessary to know the all Zend APIs or PHP APIs. All referred above is ample to help us achieve the simple communication between PHP code and C code. 
 
 ## Requirements
 
