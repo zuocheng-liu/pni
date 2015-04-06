@@ -146,7 +146,7 @@ It's unnecessary to know more about Zend APIs or PHP APIs. All referred above is
 
 ## Requirements
 
-* PHP 5.3 or higher,
+* PHP 5.3 or higher, PHP 5.2 untested
 *  *NIX Platform 
 * windows untested.
 
