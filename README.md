@@ -9,9 +9,12 @@ It resembles Java Native Interface (JNI).
 
 - Outline
 - Purpose & Features
+
 -- Situations
 -- Compared with PHP Extension
-- Examples
+
+- Pitfalls
+- Tutorial & Examples
 - Installation
 - Develpment
 - Other
