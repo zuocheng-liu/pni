@@ -142,7 +142,7 @@ ZVAL_TRUE(z)
 ZVAL_BOOL(z, boolean)    // ZVAL_BOOL(z, 1) and ZVAL_TRUE(z) are the same.Likely, ZVAL_BOOL(z, 0) and ZVAL_FALSE(z) are the same.
 ```
 
-That's All. It's unnecessary to know the all Zend APIs or PHP APIs. All referred above is ample to help us achieve the simple communication between PHP code and C code. 
+It's unnecessary to know more about Zend APIs or PHP APIs. All referred above is ample to help us achieve the simple communication between PHP code and C code. 
 
 ## Requirements
 
@@ -175,7 +175,9 @@ extension=pni.so;
 - Restart PHP service
 
 ```bash
-service php-fpm restart
+service php-fpm restart  // cgi mode
+apachectl restart   // sapi mode 
+// do nothing in cli mode
 ```
 ## Development
 
