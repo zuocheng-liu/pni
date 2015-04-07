@@ -1,7 +1,7 @@
 PNI - PHP Native Interface
 ===============
 
-PHP Native Interface (PNI) is a PHP extension that lets PHP code use code and code libraries written in other languages, such as C and C++.
+PHP Native Interface (PNI) is a PHP extension that enables PHP code to call and be called by native applications (programs specific to a hardware and operating system platform) and libraries written in other languages such as C, C++ and assembly..
 
 It resembles Java Native Interface (JNI).
 
@@ -44,7 +44,7 @@ Compared with developing PHP extension , developing native interface just like w
 
 - Reduce learning cost
 
-Developers has no need to learn the PHP-API, Zend-API or PHP extension skeleton any more. 
+Developers has no need to learn the PHP-API, Zend-API or PHP extension framework any more. 
 Data types and PNI framework are more simple.
 
 - Flexible
@@ -58,8 +58,6 @@ Increasing native interface has no effect on current PHP service.
 ## Pitfalls
 
 ## Tutorial & Examples
-
-
 
 ### 1.Write the C/C++ code
 ```C++
