@@ -9,10 +9,6 @@ It resembles Java Native Interface (JNI).
 
 - Outline
 - Purpose & Features
-
--- Situations
--- Compared with PHP Extension
-
 - Pitfalls
 - Tutorial & Examples
 - Installation
@@ -23,7 +19,7 @@ It resembles Java Native Interface (JNI).
 
 ### Situations
 
-PNI allows you to use native code when an application cannot be written entirely in the PHP language. The following are typical situations where you might decide to use native code:
+PNI allows programmers to use native code when an application cannot be written entirely in the PHP language. The following are typical situations where you might decide to use native code:
 
 - You want to implement time-critical code in a lower-level, faster programming language.
 - You have legacy code or code libraries that you want to access from PHP programs.
