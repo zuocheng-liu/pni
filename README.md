@@ -1,7 +1,7 @@
 PHP Native Interface
 ===============
 
-PHP Native Interface (PNI) is a PHP extension that enables PHP code to call and be called by native applications (programs specific to a hardware and operating system platform) and libraries written in other languages such as C, C++ and assembly..
+PHP Native Interface (PNI) is a PHP extension that enables PHP code to call and be called by native applications (programs specific to a hardware and operating system platform) and libraries written in other languages such as C, C++ and assembly.
 
 It resembles Java Native Interface (JNI).
 
@@ -28,7 +28,7 @@ PNI allows programmers to use native code when an application cannot be written 
 
 ### Compared with PHP Extension
 
-As all PHPers known, It is a tranditional way to call C/C++ that to write PHP extension. However, PNI has multiple virtues:
+As most PHPers known, It is a tranditional way to call C/C++ that to write PHP extension. However, PNI has multiple virtues:
 
 - Reduce maintenance cost
 
@@ -132,11 +132,11 @@ Thus the PNI function return variable is zval,first of all, you need to initiali
 ```
 ZVAL_NULL(z)      // assign NULL
 ZVAL_LONG(z, l)    // assign LONG
-ZVAL_STRING(z, s, duplicate)     //assign a string/char * . Duplicate ? allways be 1.
-ZVAL_STRINGL(z, s, l, duplicate) //assign a string with fixed length. Duplicate ? the same as above.
+ZVAL_STRING(z, s, duplicate)     //assign a string/char * . Duplicate ? always be 1.
+ZVAL_STRINGL(z, s, l, duplicate) //assign a string with fixed length. Duplicate ? always be 1.
 ZVAL_FALSE(z)
 ZVAL_TRUE(z)
-ZVAL_BOOL(z, boolean)    // ZVAL_BOOL(z, 1) and ZVAL_TRUE(z) are the same.Likely, ZVAL_BOOL(z, 0) and ZVAL_FALSE(z) are the same.
+ZVAL_BOOL(z, boolean)    // ZVAL_BOOL(z, 1) and ZVAL_TRUE(z) are the same.Likely, ZVAL_BOOL(z, 0) and ZVAL_FALSE(z) are the same too.
 ```
 
 It's unnecessary to know more about Zend APIs or PHP APIs. All referred above is ample to help us achieve the simple communication between PHP code and C code. 
@@ -154,7 +154,7 @@ It's unnecessary to know more about Zend APIs or PHP APIs. All referred above is
 ```shell
 git clone https://github.com/zuocheng-liu/pni.git
 ```
-- Complie the pni extension code
+- Complie the pni extension code and install
 
 ```shell
 cd <src-pni>
