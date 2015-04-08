@@ -1,7 +1,7 @@
 #include<math.h>
 #include "php.h"
 
-zval *PNI_pow(zval **args) {
+zval *PNI_pow(zval **args, int argc) {
     double x,y,z;
     zval *tmp = NULL; 
     zval *res = NULL; 

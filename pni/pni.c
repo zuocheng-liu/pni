@@ -223,7 +223,7 @@ PHP_METHOD(PNI, __construct) {
     
     /* init the dl handle resource */
     dlHandle = dlopen(lib_name, RTLD_LAZY);
-    if(!dlHandle) {
+    if (!dlHandle) {
         //php_error_docref(NULL TSRMLS_CC, E_WARNING, "dlopen error (%s) , dl handle resource not created.", dlerror());
         //RETURN_FALSE;
         spprintf(&error_msg, 0, "%s,  dl handle resource is not created.", dlerror());
@@ -252,16 +252,16 @@ PHP_METHOD(PNI, __construct) {
 Returns a zval pointer */
 PHP_METHOD(PNI, __call) {
     zval *self,  *lib_name, *args, *res;
-    zval **data;
-    HashTable *arrHash;
+    HashTable *arr_hash_tb;
     HashPosition pointer;
+    zval **data = NULL;
+    int index = 0;
     char * function_name;
     char * error_msg;
-    int i = 0, arrayCount = 0;
+    int argc = 0;
     int function_name_len = 0;
     zval *argList[MAX_PNI_FUNCTION_PARAMS];
     NATIVE_INTERFACE nativeInterface = NULL;
-    
     char *key = NULL;
     int key_len = 0;
     void * dlHandle = NULL;
@@ -272,14 +272,16 @@ PHP_METHOD(PNI, __call) {
         WRONG_PARAM_COUNT;
     }
     lib_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("_libName"), 0 TSRMLS_CC);
-    arrHash = Z_ARRVAL_P(args);
-    arrayCount = zend_hash_num_elements(arrHash);
-    for(zend_hash_internal_pointer_reset_ex(arrHash, &pointer);
-            zend_hash_get_current_data_ex(arrHash, (void**) &data, &pointer) == SUCCESS;
-            zend_hash_move_forward_ex(arrHash, &pointer)) {
-        argList[i] = *data;
-        i++;
+    /* trans zend args to c array  */
+    arr_hash_tb = Z_ARRVAL_P(args);
+    argc = zend_hash_num_elements(arr_hash_tb);
+    for (zend_hash_internal_pointer_reset_ex(arr_hash_tb, &pointer);
+            zend_hash_get_current_data_ex(arr_hash_tb, (void**) &data, &pointer) == SUCCESS;
+            zend_hash_move_forward_ex(arr_hash_tb, &pointer)) {
+        argList[index] = *data;
+        index ++;
     }
+
     /* seek the persisted dl handle */
     key_len = spprintf(&key, 0, "pni_dl_handle_%s\n", Z_STRVAL_P(lib_name));
     if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
@@ -287,7 +289,7 @@ PHP_METHOD(PNI, __call) {
         efree(key);
     }
     dlHandle = le->ptr;
-    if(!dlHandle) {
+    if (!dlHandle) {
         spprintf(&error_msg, 0, "Fail to dl Native Interface. The PNI dl handle (%s) is invalid.", Z_STRVAL_P(lib_name));
         zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
         RETURN_FALSE;
@@ -302,7 +304,7 @@ PHP_METHOD(PNI, __call) {
     }
 
     /* call native interface */
-    res = nativeInterface(argList);
+    res = nativeInterface(argList, argc);
     RETURN_ZVAL(res, 1, 0);
 }
 

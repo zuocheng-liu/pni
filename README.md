@@ -63,19 +63,19 @@ Increasing native interface has no effect on current PHP service.
 
 /* 
  * double pow(double x, double y); 
+ * every PNI function returns zval(php variable) , the paramters are in the args
  */
-zval *PNI_pow(zval **args) {  // every PNI function returns zval(php variable) , the paramters are in the args
+zval *PNI_pow(zval **args, int argc) {
+    zval *tmp, *res;
     double x,y,z;
-    zval *tmp = NULL;
-    zval *res = NULL;
     tmp = args[0];     
     x = Z_DVAL_P(tmp);  // get the double value via Z_DVAL_P
     tmp = args[1];
     y = Z_DVAL_P(tmp); // Why we write it like this instead of `y = Z_DVAL_P(args[1]);`? It's a C Trap.
     
-    z = pow(x,y);    // 
+    z = pow(x,y);    // Function pow is the target.
     ALLOC_INIT_ZVAL(res);  //  It's essential to init return value unless the return value is NULL.
-    ZVAL_DOUBLE(res, z);   // Use ZVAL_DOUBLE to assign the result to the return variable， the data type is double.
+    ZVAL_DOUBLE(res, z);   // Use ZVAL_DOUBLE to assign the result to the return variable，the data type is double.
     return res;
 }
 ```

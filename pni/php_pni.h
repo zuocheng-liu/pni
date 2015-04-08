@@ -50,7 +50,7 @@ PHP_MINFO_FUNCTION(pni);
 */
 #define PHP_DL_HANDLE_RES_NAME "DL Handle"
 #define MAX_PNI_FUNCTION_PARAMS 255
-typedef zval *(*NATIVE_INTERFACE)(zval **args);
+typedef zval *(*NATIVE_INTERFACE)(zval **args, int argc);
 
 ZEND_BEGIN_MODULE_GLOBALS(pni)
     void *dlHandle;
