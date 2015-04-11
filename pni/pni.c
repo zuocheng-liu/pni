@@ -28,11 +28,16 @@
 #include "php_pni.h"
 #include <dlfcn.h>
 
+/* function, variable and class property lables definination */
+#define PNI_PROPERTY_LIBNAME_LABEL "_libName"
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_pni___call, 0, 0, 2)
      ZEND_ARG_INFO(0, function_name)
      ZEND_ARG_INFO(0, arguments)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO(arginfo_pni__void, 0)
+ZEND_END_ARG_INFO()
 
 /* If you declare any globals in php_pni.h uncomment this:*/
 ZEND_DECLARE_MODULE_GLOBALS(pni)
@@ -51,6 +56,7 @@ static zend_class_entry *pni_exception_ptr;
 PHP_FUNCTION(get_pni_version);
 PHP_METHOD(PNI, __construct);                                      
 PHP_METHOD(PNI, __call);
+PHP_METHOD(PNI, getLibName);
 
 /* {{{ pni_functions[]
  *
@@ -59,8 +65,9 @@ PHP_METHOD(PNI, __call);
 const zend_function_entry pni_functions[] = {
     PHP_FE(get_pni_version,    NULL) 
     
-    PHP_ME(PNI, __construct,     NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
-    PHP_ME(PNI, __call,     arginfo_pni___call, 0) 
+    PHP_ME(PNI, __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_ME(PNI, __call,         arginfo_pni___call, 0) 
+    PHP_ME(PNI, getLibName,     arginfo_pni__void, ZEND_ACC_PUBLIC) 
     
     PHP_FE_END  /* Must be the last line in pni_functions[] */
 };
@@ -129,13 +136,15 @@ PHP_MINIT_FUNCTION(pni) {
     */
     le_dl_handle_persist = zend_register_list_destructors_ex(NULL, php_dl_handle_persist_dtor, PHP_DL_HANDLE_RES_NAME, module_number);
     
+    /* class PNI */
     INIT_CLASS_ENTRY(pni, "PNI", pni_functions);
     pni_ptr = zend_register_internal_class_ex(&pni, NULL, NULL TSRMLS_CC);
-    
+    zend_declare_property_string(pni_ptr, PNI_PROPERTY_LIBNAME_LABEL, sizeof(PNI_PROPERTY_LIBNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED TSRMLS_CC);
+
+    /* class PNIException*/
     INIT_CLASS_ENTRY(pni, "PNIException", pni_exception_functions);
     pni_exception_ptr = zend_register_internal_class_ex(&pni, zend_exception_get_default(TSRMLS_C), NULL TSRMLS_CC);
     
-
     return SUCCESS;
 }
 /* }}} */
@@ -195,11 +204,11 @@ PHP_FUNCTION(get_pni_version) {
 }
 
 /* {{{ proto public void PNI::__construct($libName)
- *    Constructor. Throws an Exception in case the given shared library does not exist */
+ *    Constructor. Throws an PNIException in case the given shared library does not exist */
 PHP_METHOD(PNI, __construct) {
     char *lib_name = NULL;
     int lib_name_len = 0;
-    zval *zendValue = NULL, *self = NULL;
+    zval *self = NULL;
    
     char *key = NULL;
     char * error_msg = NULL;
@@ -207,7 +216,7 @@ PHP_METHOD(PNI, __construct) {
     void * dlHandle = NULL;
     zend_rsrc_list_entry *le, new_le;
     
-    /* get param $libName */
+    /* get the parameter $libName */
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &lib_name, &lib_name_len) == FAILURE) {
         WRONG_PARAM_COUNT;
     }
@@ -239,10 +248,7 @@ PHP_METHOD(PNI, __construct) {
     efree(key);
     /* save the libname to private variable */
     self = getThis();
-    MAKE_STD_ZVAL(zendValue);
-    ZVAL_STRINGL(zendValue, lib_name, lib_name_len, 0);
-    SEPARATE_ZVAL_TO_MAKE_IS_REF(&zendValue);
-    zend_update_property(Z_OBJCE_P(self), self, ZEND_STRL("_libName"), zendValue TSRMLS_CC);
+    zend_update_property_stringl(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), lib_name, lib_name_len TSRMLS_CC);
     RETURN_TRUE;
 }
 /* }}} */
@@ -271,7 +277,7 @@ PHP_METHOD(PNI, __call) {
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz", &function_name, &function_name_len, &args) == FAILURE) {
         WRONG_PARAM_COUNT;
     }
-    lib_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("_libName"), 0 TSRMLS_CC);
+    lib_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), 0 TSRMLS_CC);
     /* trans zend args to c array  */
     arr_hash_tb = Z_ARRVAL_P(args);
     argc = zend_hash_num_elements(arr_hash_tb);
@@ -307,6 +313,20 @@ PHP_METHOD(PNI, __call) {
     res = nativeInterface(argList, argc);
     RETURN_ZVAL(res, 1, 0);
 }
+/* }}} */
+
+/* {{{ proto public void PNI::getLibName()
+Returns a string */
+PHP_METHOD(PNI, getLibName) {
+    zval *self, *value;
+    self = getThis();
+    if (zend_parse_parameters_none() == FAILURE) {
+        return;
+    }
+    value = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), 0 TSRMLS_CC);
+    RETURN_STRING(Z_STRVAL_P(value), 1);
+}
+/* }}} */
 
 
 /* release the dl resource*/
@@ -315,10 +335,6 @@ static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
     dlclose(dlHandle);
 }
 
-
-/* }}} */
-
-/* }}} */
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
    unfold functions in source code. See the corresponding marks just before 
    function definition, where the functions purpose is also documented. Please 
