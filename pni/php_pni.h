@@ -48,10 +48,6 @@ PHP_MINFO_FUNCTION(pni);
     Declare any global variables you may need between the BEGIN
     and END macros here:     
 */
-#define PHP_DL_HANDLE_RES_NAME "DL Handle"
-#define MAX_PNI_FUNCTION_PARAMS 255
-typedef zval *(*NATIVE_INTERFACE)(zval **args, int argc);
-
 ZEND_BEGIN_MODULE_GLOBALS(pni)
     void *dlHandle;
 ZEND_END_MODULE_GLOBALS(pni)

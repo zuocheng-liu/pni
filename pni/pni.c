@@ -28,9 +28,27 @@
 #include "php_pni.h"
 #include <dlfcn.h>
 
-/* function, variable and class property lables definination */
+/* function variable and class property lables definination */
+#define PHP_DL_HANDLE_RES_NAME "DL Handle"
+#define MAX_PNI_FUNCTION_PARAMS 255
 #define PNI_PROPERTY_LIBNAME_LABEL "_libName"
+#define PNI_PROPERTY_FUNCTIONNAME_LABEL "_functionName"
+#define PNI_PROPERTY_RETURN_DATA_TYPE_LABEL "_returnDataType"
 
+#define PNI_DATA_TYPE_VOID 0
+#define PNI_DATA_TYPE_CHAR 1
+#define PNI_DATA_TYPE_INT 4
+#define PNI_DATA_TYPE_LONG 8
+#define PNI_DATA_TYPE_FLOAT 4
+#define PNI_DATA_TYPE_DOUBLE 8
+#define PNI_DATA_TYPE_STRING 8
+#define PNI_DATA_TYPE_POINTER 8
+
+typedef zval *(*NATIVE_INTERFACE)(zval **args, int argc);
+typedef void *(*NATIVE_INTERFACE_SYMBOL)();
+
+
+/* arg_info definition */
 ZEND_BEGIN_ARG_INFO_EX(arginfo_pni___call, 0, 0, 2)
      ZEND_ARG_INFO(0, function_name)
      ZEND_ARG_INFO(0, arguments)
@@ -39,24 +57,62 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO(arginfo_pni__void, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_pni_function_invoke, 0, 0, 0) 
+     ZEND_ARG_INFO(0, ...)
+ZEND_END_ARG_INFO()
+
+/* macro */
+#define PNI_RETURN(res,data_type,value) do {    \
+    switch(data_type) {                         \
+        case PNI_DATA_TYPE_VOID :               \
+            RETURN_NULL();                      \
+        case PNI_DATA_TYPE_CHAR :               \
+        case PNI_DATA_TYPE_INT :                \
+        case PNI_DATA_TYPE_LONG :               \
+            ZVAL_LONG(res, (long)value)         \
+            break;                              \
+        case PNI_DATA_TYPE_FLOAT :              \
+        case PNI_DATA_TYPE_DOUBLE :             \
+            ZVAL_DOUBLE(res, (double)value)     \
+            break;                              \
+        case PNI_DATA_TYPE_STRING :             \
+        case PNI_DATA_TYPE_POINTER :            \
+            ZVAL_STRING(res, (char *)value, 1)  \
+            break;                              \
+        default :                               \
+            RETURN_NULL()                       \
+    }                                           \
+    RETURN_ZVAL(res, 1,0)                       \
+}while (0)
+
 /* If you declare any globals in php_pni.h uncomment this:*/
 ZEND_DECLARE_MODULE_GLOBALS(pni)
 /* True global resources - no need for thread safety here */
 static int le_dl_handle_persist;
-
 
 /* Local functions */
 static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC);
 
 
 static zend_class_entry *pni_ptr;
+static zend_class_entry *pni_function_ptr;
 static zend_class_entry *pni_exception_ptr;
-
+static zend_class_entry *pni_integer_ptr;
+/*
+static zend_class_entry *pni_float_ptr;
+static zend_class_entry *pni_double_ptr;
+static zend_class_entry *pni_string_ptr;
+static zend_class_entry *pni_void_ptr;
+static zend_class_entry *pni_char_ptr;
+static zend_class_entry *pni_data_type_ptr;
+*/
 /* PNI functions */
 PHP_FUNCTION(get_pni_version);
 PHP_METHOD(PNI, __construct);                                      
 PHP_METHOD(PNI, __call);
 PHP_METHOD(PNI, getLibName);
+PHP_METHOD(PNIFunction, __construct);                                      
+PHP_METHOD(PNIFunction, invoke);                                      
 
 /* {{{ pni_functions[]
  *
@@ -75,10 +131,20 @@ const zend_function_entry pni_functions[] = {
 
 /* {{{ pni_exception_functions[]
  */
+const zend_function_entry pni_function_functions[] = {
+    PHP_ME(PNIFunction, __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_ME(PNIFunction, invoke,         arginfo_pni_function_invoke, 0) 
+    PHP_FE_END 
+};
+/* }}} */
+
+/* {{{ pni_function_functions[]
+ */
 const zend_function_entry pni_exception_functions[] = {
     PHP_FE_END  /* Must be the last line in pni_functions[] */
 };
 /* }}} */
+
 
 
 /* {{{ pni_module_entry
@@ -140,6 +206,13 @@ PHP_MINIT_FUNCTION(pni) {
     INIT_CLASS_ENTRY(pni, "PNI", pni_functions);
     pni_ptr = zend_register_internal_class_ex(&pni, NULL, NULL TSRMLS_CC);
     zend_declare_property_string(pni_ptr, PNI_PROPERTY_LIBNAME_LABEL, sizeof(PNI_PROPERTY_LIBNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED TSRMLS_CC);
+
+    /* class PNIFunction */
+    INIT_CLASS_ENTRY(pni, "PNIFunction", pni_function_functions);
+    pni_function_ptr = zend_register_internal_class_ex(&pni, NULL, NULL TSRMLS_CC);
+    zend_declare_property_string(pni_function_ptr, PNI_PROPERTY_LIBNAME_LABEL, sizeof(PNI_PROPERTY_LIBNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED TSRMLS_CC);
+    zend_declare_property_string(pni_function_ptr, PNI_PROPERTY_FUNCTIONNAME_LABEL, sizeof(PNI_PROPERTY_FUNCTIONNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED TSRMLS_CC);
+    zend_declare_property_long(pni_function_ptr, PNI_PROPERTY_RETURN_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL) - 1, 0, ZEND_ACC_PROTECTED TSRMLS_CC);
 
     /* class PNIException*/
     INIT_CLASS_ENTRY(pni, "PNIException", pni_exception_functions);
@@ -328,6 +401,126 @@ PHP_METHOD(PNI, getLibName) {
 }
 /* }}} */
 
+/* {{{ proto public void PNIFunction::__construct($returnDataType, $functionName, $libName)
+ *    Constructor. Throws an PNIException in case the given shared library does not exist */
+PHP_METHOD(PNIFunction, __construct) {
+    int data_type = 0;
+    char *lib_name = NULL;
+    int lib_name_len = 0;
+    char *function_name = NULL;
+    int function_name_len = 0;
+    
+    zval *self = NULL;
+   
+    char *key = NULL;
+    char * error_msg = NULL;
+    int key_len = 0;
+    void * dlHandle = NULL;
+    zend_rsrc_list_entry *le, new_le;
+    
+    /* get the parameter $libName */
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "Iss", &data_type, &function_name, &function_name_len, &lib_name, &lib_name_len) == FAILURE) {
+        WRONG_PARAM_COUNT;
+    }
+
+ 
+    /* get the dl handle, if not exists, create it and persist it */
+    key_len = spprintf(&key, 0, "pni_dl_handle_%s\n", lib_name);
+    if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
+        ZEND_REGISTER_RESOURCE(return_value, le->ptr, le_dl_handle_persist);
+        efree(key);
+        RETURN_TRUE;
+    }
+    
+    /* init the dl handle resource */
+    dlHandle = dlopen(lib_name, RTLD_LAZY);
+    if (!dlHandle) {
+        //php_error_docref(NULL TSRMLS_CC, E_WARNING, "dlopen error (%s) , dl handle resource not created.", dlerror());
+        //RETURN_FALSE;
+        spprintf(&error_msg, 0, "%s,  dl handle resource is not created.", dlerror());
+        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
+        RETURN_FALSE;
+    }
+    /* registe dl handle resource */
+    ZEND_REGISTER_RESOURCE(return_value, &dlHandle, le_dl_handle_persist);
+    /* persist dl handle */
+    new_le.ptr = dlHandle;
+    new_le.type = le_dl_handle_persist;
+    zend_hash_add(&EG(persistent_list), key, key_len + 1, &new_le, sizeof(zend_rsrc_list_entry), NULL);
+    efree(key);
+
+    self = getThis();
+    /* save the libname to private variable */
+    zend_update_property_stringl(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), lib_name, lib_name_len TSRMLS_CC);
+    /* save the function name to private variable */
+    zend_update_property_stringl(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_FUNCTIONNAME_LABEL), function_name, function_name_len TSRMLS_CC);
+    /* save the data_type to private variable */
+    zend_update_property_long(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL), data_type TSRMLS_CC);
+    RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto public void PNIFunction::invoke(PNIDataType arg1, ...)
+ *   Call the native function . Throws an PNIException. */
+PHP_METHOD(PNIFunction, invoke) {
+    NATIVE_INTERFACE_SYMBOL nativeInterface = NULL;
+    void * pni_return_value = NULL;
+    int pni_return_data_type = 0;
+    zval *self,  *lib_name, *function_name, *return_data_type, *res;
+    zval ***args;
+    int argc = 0;
+    
+    HashTable *arr_hash_tb;
+    HashPosition pointer;
+    
+    char *key = NULL;
+    int key_len = 0;
+    
+    void * dlHandle = NULL;
+    zend_rsrc_list_entry *le, new_le;
+    char * error_msg;
+    
+    self = getThis();
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "+", &args, &argc) == FAILURE) {
+        WRONG_PARAM_COUNT;
+    }
+    
+    lib_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), 0 TSRMLS_CC);
+    function_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_FUNCTIONNAME_LABEL), 0 TSRMLS_CC);
+    return_data_type = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL), 0 TSRMLS_CC);
+
+    /* seek the persisted dl handle */
+    key_len = spprintf(&key, 0, "pni_dl_handle_%s\n", Z_STRVAL_P(lib_name));
+    if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
+        ZEND_REGISTER_RESOURCE(return_value, le->ptr, le_dl_handle_persist);
+        efree(key);
+    }
+    dlHandle = le->ptr;
+    if (!dlHandle) {
+        spprintf(&error_msg, 0, "Fail to dl Native Interface. The PNI dl handle (%s) is invalid.", Z_STRVAL_P(lib_name));
+        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
+        efree(args);
+        RETURN_FALSE;
+    }
+    
+    /* seek dynamic library function symbol */
+    nativeInterface = (NATIVE_INTERFACE_SYMBOL)dlsym(dlHandle, Z_STRVAL_P(function_name));
+    if (!nativeInterface) {
+        spprintf(&error_msg, 0, "Dlsym %s error (%s). ", Z_STRVAL_P(function_name), dlerror());
+        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
+        efree(args);
+        RETURN_FALSE;
+    }
+    
+    efree(args);
+    ALLOC_INIT_ZVAL(res);
+    /* call native interface */
+    //res = nativeInterface(argList, argc);
+    __asm__ __volatile__ ("");
+    pni_return_data_type = Z_DVAL_P(return_data_type);
+    PNI_RETURN(res, pni_return_data_type, value);
+}
+/* }}} */
 
 /* release the dl resource*/
 static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
