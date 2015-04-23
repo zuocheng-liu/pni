@@ -34,18 +34,22 @@
 #define PNI_PROPERTY_LIBNAME_LABEL "_libName"
 #define PNI_PROPERTY_FUNCTIONNAME_LABEL "_functionName"
 #define PNI_PROPERTY_RETURN_DATA_TYPE_LABEL "_returnDataType"
+#define PNI_PROPERTY_DATA_TYPE_LABEL "dataType"
+#define PNI_PROPERTY_VALUE_LABEL "value"
 
-#define PNI_DATA_TYPE_VOID 0
-#define PNI_DATA_TYPE_CHAR 1
-#define PNI_DATA_TYPE_INT 4
-#define PNI_DATA_TYPE_LONG 8
-#define PNI_DATA_TYPE_FLOAT 4
-#define PNI_DATA_TYPE_DOUBLE 8
-#define PNI_DATA_TYPE_STRING 8
-#define PNI_DATA_TYPE_POINTER 8
+#define PNI_DATA_TYPE_VOID      0
+#define PNI_DATA_TYPE_CHAR      1
+#define PNI_DATA_TYPE_INT       2
+#define PNI_DATA_TYPE_LONG      3
+#define PNI_DATA_TYPE_FLOAT     4
+#define PNI_DATA_TYPE_DOUBLE    5
+#define PNI_DATA_TYPE_STRING    6
+#define PNI_DATA_TYPE_POINTER   7
 
 typedef zval *(*NATIVE_INTERFACE)(zval **args, int argc);
 typedef void *(*NATIVE_INTERFACE_SYMBOL)();
+
+typedef void * BASE_DATA_TYPE;
 
 
 /* arg_info definition */
@@ -62,27 +66,27 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_pni_function_invoke, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
 /* macro */
-#define PNI_RETURN(res,data_type,value) do {    \
-    switch(data_type) {                         \
-        case PNI_DATA_TYPE_VOID :               \
-            RETURN_NULL();                      \
-        case PNI_DATA_TYPE_CHAR :               \
-        case PNI_DATA_TYPE_INT :                \
-        case PNI_DATA_TYPE_LONG :               \
-            ZVAL_LONG(res, (long)value)         \
-            break;                              \
-        case PNI_DATA_TYPE_FLOAT :              \
-        case PNI_DATA_TYPE_DOUBLE :             \
-            ZVAL_DOUBLE(res, (double)value)     \
-            break;                              \
-        case PNI_DATA_TYPE_STRING :             \
-        case PNI_DATA_TYPE_POINTER :            \
-            ZVAL_STRING(res, (char *)value, 1)  \
-            break;                              \
-        default :                               \
-            RETURN_NULL()                       \
-    }                                           \
-    RETURN_ZVAL(res, 1,0)                       \
+#define PNI_RETURN(res,data_type,value) do {        \
+    switch (data_type) {                            \
+        case PNI_DATA_TYPE_VOID :                   \
+            RETURN_NULL();                          \
+        case PNI_DATA_TYPE_CHAR :                   \
+        case PNI_DATA_TYPE_INT :                    \
+        case PNI_DATA_TYPE_LONG :                   \
+            ZVAL_LONG((res), (long)(value));        \
+            break;                                  \
+        case PNI_DATA_TYPE_FLOAT :                  \
+        case PNI_DATA_TYPE_DOUBLE :                 \
+            ZVAL_DOUBLE((res), (double)(value));    \
+            break;                                  \
+        case PNI_DATA_TYPE_STRING :                 \
+        case PNI_DATA_TYPE_POINTER :                \
+            ZVAL_STRING((res), (char *)(value), 1); \
+            break;                                  \
+        default :                                   \
+            RETURN_NULL();                          \
+    }                                               \
+    RETURN_ZVAL((res), 1,0);                        \
 }while (0)
 
 /* If you declare any globals in php_pni.h uncomment this:*/
@@ -92,12 +96,15 @@ static int le_dl_handle_persist;
 
 /* Local functions */
 static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC);
-
+static void trans_args_to_param_list(zval ***, const int, long *, int *, double *, int *);
+/* asm debug mark */
+static void asm_debug_mark(){};
 
 static zend_class_entry *pni_ptr;
 static zend_class_entry *pni_function_ptr;
 static zend_class_entry *pni_exception_ptr;
 static zend_class_entry *pni_integer_ptr;
+static zend_class_entry *pni_data_type_ptr;
 /*
 static zend_class_entry *pni_float_ptr;
 static zend_class_entry *pni_double_ptr;
@@ -113,6 +120,7 @@ PHP_METHOD(PNI, __call);
 PHP_METHOD(PNI, getLibName);
 PHP_METHOD(PNIFunction, __construct);                                      
 PHP_METHOD(PNIFunction, invoke);                                      
+PHP_METHOD(PNIDataType, __construct);                                      
 
 /* {{{ pni_functions[]
  *
@@ -144,6 +152,15 @@ const zend_function_entry pni_exception_functions[] = {
     PHP_FE_END  /* Must be the last line in pni_functions[] */
 };
 /* }}} */
+
+/* {{{ pni_function_functions[]
+ */
+const zend_function_entry pni_data_type_functions[] = {
+    PHP_ME(PNIDataType, __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_FE_END  /* Must be the last line in pni_functions[] */
+};
+/* }}} */
+
 
 
 
@@ -217,6 +234,48 @@ PHP_MINIT_FUNCTION(pni) {
     /* class PNIException*/
     INIT_CLASS_ENTRY(pni, "PNIException", pni_exception_functions);
     pni_exception_ptr = zend_register_internal_class_ex(&pni, zend_exception_get_default(TSRMLS_C), NULL TSRMLS_CC);
+    
+    /* class PNIDataType */
+    INIT_CLASS_ENTRY(pni, "PNIDataType", pni_data_type_functions);
+    pni_data_type_ptr = zend_register_internal_class_ex(&pni, NULL, NULL TSRMLS_CC);
+    zend_declare_class_constant_long(pni_data_type_ptr, "INTEGER", sizeof("INTEGER") -1 , PNI_DATA_TYPE_INT TSRMLS_CC);
+    zend_declare_property_null(pni_data_type_ptr, PNI_PROPERTY_VALUE_LABEL, sizeof(PNI_PROPERTY_VALUE_LABEL) - 1, ZEND_ACC_PROTECTED TSRMLS_CC);
+    zend_declare_property_null(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, ZEND_ACC_PROTECTED TSRMLS_CC);
+    
+    /* class PNIInteger */
+    INIT_CLASS_ENTRY(pni, "PNIInteger", pni_data_type_functions);
+    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    zend_declare_property_long(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_INT, ZEND_ACC_PROTECTED TSRMLS_CC);
+    
+    /* class PNILong */
+    INIT_CLASS_ENTRY(pni, "PNILong", pni_data_type_functions);
+    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    zend_declare_property_long(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_LONG, ZEND_ACC_PROTECTED TSRMLS_CC);
+    
+    /* class PNIChar */
+    INIT_CLASS_ENTRY(pni, "PNIChar", pni_data_type_functions);
+    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    zend_declare_property_long(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_CHAR, ZEND_ACC_PROTECTED TSRMLS_CC);
+    
+    /* class PNIFloat */
+    INIT_CLASS_ENTRY(pni, "PNIFloat", pni_data_type_functions);
+    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    zend_declare_property_long(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_FLOAT, ZEND_ACC_PROTECTED TSRMLS_CC);
+    
+    /* class PNIDouble */
+    INIT_CLASS_ENTRY(pni, "PNIDouble", pni_data_type_functions);
+    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    zend_declare_property_long(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_DOUBLE, ZEND_ACC_PROTECTED TSRMLS_CC);
+    
+    /* class PNIDouble */
+    INIT_CLASS_ENTRY(pni, "PNIString", pni_data_type_functions);
+    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    zend_declare_property_long(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_STRING, ZEND_ACC_PROTECTED TSRMLS_CC);
+    
+    /* class PNIPointer */
+    INIT_CLASS_ENTRY(pni, "PNIPointer", pni_data_type_functions);
+    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    zend_declare_property_long(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_POINTER, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     return SUCCESS;
 }
@@ -463,23 +522,26 @@ PHP_METHOD(PNIFunction, __construct) {
 /* {{{ proto public void PNIFunction::invoke(PNIDataType arg1, ...)
  *   Call the native function . Throws an PNIException. */
 PHP_METHOD(PNIFunction, invoke) {
-    NATIVE_INTERFACE_SYMBOL nativeInterface = NULL;
-    void * pni_return_value = NULL;
-    int pni_return_data_type = 0;
+    NATIVE_INTERFACE_SYMBOL nativeInterface;
+    char * pni_return_value;
+    int pni_return_data_type;
     zval *self,  *lib_name, *function_name, *return_data_type, *res;
     zval ***args;
-    int argc = 0;
+    int argc;
     
     HashTable *arr_hash_tb;
     HashPosition pointer;
     
-    char *key = NULL;
-    int key_len = 0;
+    char *key;
+    int key_len;
     
-    void * dlHandle = NULL;
+    void * dlHandle;
     zend_rsrc_list_entry *le, new_le;
     char * error_msg;
     
+    void * long_param_list[MAX_PNI_FUNCTION_PARAMS];
+    int long_param_count;
+
     self = getThis();
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "+", &args, &argc) == FAILURE) {
         WRONG_PARAM_COUNT;
@@ -495,6 +557,7 @@ PHP_METHOD(PNIFunction, invoke) {
         ZEND_REGISTER_RESOURCE(return_value, le->ptr, le_dl_handle_persist);
         efree(key);
     }
+
     dlHandle = le->ptr;
     if (!dlHandle) {
         spprintf(&error_msg, 0, "Fail to dl Native Interface. The PNI dl handle (%s) is invalid.", Z_STRVAL_P(lib_name));
@@ -513,16 +576,86 @@ PHP_METHOD(PNIFunction, invoke) {
     }
     
     efree(args);
+    RETURN_NULL();
+    //RETURN_ZVAL(args ,1,0);
     ALLOC_INIT_ZVAL(res);
+    
     /* call native interface */
     //res = nativeInterface(argList, argc);
     __asm__ __volatile__ ("");
     pni_return_data_type = Z_DVAL_P(return_data_type);
-    PNI_RETURN(res, pni_return_data_type, value);
+    PNI_RETURN(res, pni_return_data_type, *pni_return_value);
 }
 /* }}} */
 
-/* release the dl resource*/
+/* {{{ proto public void PNI::__construct($libName)
+ *    Constructor. Throws an PNIException in case the given shared library does not exist */
+PHP_METHOD(PNIDataType, __construct) {
+    zval * value;
+    zval * self;
+    /* get the parameter $value */
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &value) == FAILURE) {
+        WRONG_PARAM_COUNT;
+    }
+    self = getThis();
+    zend_update_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), value TSRMLS_CC);
+}
+/* }}} */
+
+/* trans the parameters value to c array list */
+static void trans_args_to_param_list(zval ***args,const int argc, 
+        long * long_param_list, int *long_param_count, 
+        double * double_param_list, int *double_param_count) {
+    
+    int long_offset = 0;
+    int double_offset = 0;
+    int pni_data_type;
+    zval **array;
+    zval *zval_value, *zval_data_type;
+    zval *obj;
+    if (0 == argc) {
+        return ;
+    }
+    array = args[0];
+    SEPARATE_ZVAL(array);
+    convert_to_array_ex(array);
+    for (zend_hash_internal_pointer_reset(Z_ARRVAL_PP(array));
+            zend_hash_get_current_data(Z_ARRVAL_PP(array), (void **)&obj) == SUCCESS;
+            zend_hash_move_forward(Z_ARRVAL_PP(array))) {
+
+        zval_value = zend_read_property(Z_OBJCE_P(obj), obj, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), 0 TSRMLS_CC);       
+        zval_data_type = zend_read_property(Z_OBJCE_P(obj), obj, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), 0 TSRMLS_CC);       
+        pni_data_type = Z_LVAL_P(zval_data_type);
+        switch ( pni_data_type ) {
+            case PNI_DATA_TYPE_CHAR :
+            case PNI_DATA_TYPE_INT :
+            case PNI_DATA_TYPE_LONG :
+                convert_to_long(zval_value);
+                long_param_list[long_offset] = (long)(Z_LVAL_P(zval_value)); 
+                long_offset ++;
+                break;
+            case PNI_DATA_TYPE_STRING :
+            case PNI_DATA_TYPE_POINTER:
+                convert_to_string(zval_value);
+                long_param_list[long_offset] = (long)(Z_STRVAL_P(zval_value));;
+                long_offset ++;
+                break;
+
+            case PNI_DATA_TYPE_FLOAT :
+            case PNI_DATA_TYPE_DOUBLE :
+                convert_to_double(zval_value);
+                double_param_list[double_offset] = (double)(Z_DVAL_P(zval_value));
+                double_offset ++;
+                break;
+            default :
+                break;
+        }
+    }
+    *long_param_count = long_offset;
+    *double_param_count = double_offset;
+}
+
+/* release the dl resource */
 static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
     void *dlHandle = (void *) rsrc->ptr;
     dlclose(dlHandle);
