@@ -28,6 +28,7 @@
 #include "php_pni.h"
 #include <dlfcn.h>
 
+
 /* function variable and class property lables definination */
 #define PHP_DL_HANDLE_RES_NAME "DL Handle"
 #define MAX_PNI_FUNCTION_PARAMS 255
@@ -48,8 +49,7 @@
 
 typedef zval *(*NATIVE_INTERFACE)(zval **args, int argc);
 typedef void *(*NATIVE_INTERFACE_SYMBOL)();
-
-typedef void * BASE_DATA_TYPE;
+typedef void *PNI_DATA_TYPE_ANY;
 
 
 /* arg_info definition */
@@ -66,27 +66,31 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_pni_function_invoke, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
 /* macro */
-#define PNI_RETURN(res,data_type,value) do {        \
-    switch (data_type) {                            \
-        case PNI_DATA_TYPE_VOID :                   \
-            RETURN_NULL();                          \
-        case PNI_DATA_TYPE_CHAR :                   \
-        case PNI_DATA_TYPE_INT :                    \
-        case PNI_DATA_TYPE_LONG :                   \
-            ZVAL_LONG((res), (long)(value));        \
-            break;                                  \
-        case PNI_DATA_TYPE_FLOAT :                  \
-        case PNI_DATA_TYPE_DOUBLE :                 \
-            ZVAL_DOUBLE((res), (double)(value));    \
-            break;                                  \
-        case PNI_DATA_TYPE_STRING :                 \
-        case PNI_DATA_TYPE_POINTER :                \
-            ZVAL_STRING((res), (char *)(value), 1); \
-            break;                                  \
-        default :                                   \
-            RETURN_NULL();                          \
-    }                                               \
-    RETURN_ZVAL((res), 1,0);                        \
+#define PNI_RETURN(res, data_type, value) do {          \
+    void ** value_p;                                    \
+    double * double_value_p;                            \
+    switch (data_type) {                                \
+        case PNI_DATA_TYPE_VOID :                       \
+            RETURN_NULL();                              \
+        case PNI_DATA_TYPE_CHAR :                       \
+        case PNI_DATA_TYPE_INT :                        \
+        case PNI_DATA_TYPE_LONG :                       \
+            ZVAL_LONG((res), (long)(value));            \
+            break;                                      \
+        case PNI_DATA_TYPE_FLOAT :                      \
+        case PNI_DATA_TYPE_DOUBLE :                     \
+            value_p = &value;                           \
+            double_value_p = (double *)value_p;         \
+            ZVAL_DOUBLE((res), (*double_value_p));      \
+            break;                                      \
+        case PNI_DATA_TYPE_STRING :                     \
+        case PNI_DATA_TYPE_POINTER :                    \
+            ZVAL_STRING((res), (char *)(value), 1);     \
+            break;                                      \
+        default :                                       \
+            RETURN_NULL();                              \
+    }                                                   \
+    RETURN_ZVAL((res), 1,0);                            \
 }while (0)
 
 /* If you declare any globals in php_pni.h uncomment this:*/
@@ -97,6 +101,7 @@ static int le_dl_handle_persist;
 /* Local functions */
 static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC);
 static void trans_args_to_param_list(zval ***, const int, long *, int *, double *, int *);
+static void *call_native_interface(NATIVE_INTERFACE_SYMBOL,const long const *, const int ,const double const *, const int);
 /* asm debug mark */
 
 /* class entry declare */
@@ -136,7 +141,7 @@ const zend_function_entry pni_functions[] = {
 };
 /* }}} */
 
-/* {{{ pni_exception_functions[]
+/* {{{ pni_function_functions[]
  */
 const zend_function_entry pni_function_functions[] = {
     PHP_ME(PNIFunction, __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
@@ -146,18 +151,18 @@ const zend_function_entry pni_function_functions[] = {
 };
 /* }}} */
 
-/* {{{ pni_function_functions[]
+/* {{{ pni_exception_functions[]
  */
 const zend_function_entry pni_exception_functions[] = {
-    PHP_FE_END  /* Must be the last line in pni_functions[] */
+    PHP_FE_END
 };
 /* }}} */
 
-/* {{{ pni_function_functions[]
+/* {{{ pni_data_type_functions[]
  */
 const zend_function_entry pni_data_type_functions[] = {
     PHP_ME(PNIDataType, __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
-    PHP_FE_END  /* Must be the last line in pni_functions[] */
+    PHP_FE_END 
 };
 /* }}} */
 
@@ -360,7 +365,6 @@ PHP_METHOD(PNI, __construct) {
         WRONG_PARAM_COUNT;
     }
 
- 
     /* get the dl handle, if not exists, create it and persist it */
     key_len = spprintf(&key, 0, "pni_dl_handle_%s\n", lib_name);
     if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
@@ -526,38 +530,33 @@ PHP_METHOD(PNIFunction, __construct) {
 }
 /* }}} */
 
-static void asm_debug_mark(){};
 /* {{{ proto public void PNIFunction::invoke(PNIDataType arg1, ...)
  *   Call the native function . Throws an PNIException. */
 PHP_METHOD(PNIFunction, invoke) {
-    NATIVE_INTERFACE_SYMBOL nativeInterface;
-    char * pni_return_value;
+    void *pni_return_value;
     int pni_return_data_type;
     zval *self,  *lib_name, *function_name, *return_data_type, *res;
     zval ***args;
     int argc;
-    
     HashTable *arr_hash_tb;
     HashPosition pointer;
-    
+
     char *key;
     int key_len;
-    
+
     void * dlHandle;
     zend_rsrc_list_entry *le, new_le;
     char * error_msg;
-    
-    void * long_param_list[MAX_PNI_FUNCTION_PARAMS];
-    int long_param_count;
 
-    self = getThis();
-    if (0 == (ZEND_NUM_ARGS() TSRMLS_CC)) {
-        args = NULL;
-        argc = 0;
-    } else if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "+", &args, &argc) == FAILURE) {
-            WRONG_PARAM_COUNT;
-    }
+    long long_param_list[MAX_PNI_FUNCTION_PARAMS];
+    int long_param_count;
+    double double_param_list[MAX_PNI_FUNCTION_PARAMS];
+    int double_param_count;
+    NATIVE_INTERFACE_SYMBOL nativeInterface;
+    void ** value_p;                                    
+    double * double_value_p;                            
     
+    self = getThis();
     lib_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), 0 TSRMLS_CC);
     function_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_FUNCTIONNAME_LABEL), 0 TSRMLS_CC);
     return_data_type = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL), 0 TSRMLS_CC);
@@ -586,16 +585,45 @@ PHP_METHOD(PNIFunction, invoke) {
         RETURN_FALSE;
     }
     
-    efree(args);
-    RETURN_NULL();
-    //RETURN_ZVAL(args ,1,0);
-    ALLOC_INIT_ZVAL(res);
-    asm_debug_mark();
-    /* call native interface */
-    //res = nativeInterface(argList, argc);
-    __asm__ __volatile__ ("");
-    pni_return_data_type = Z_DVAL_P(return_data_type);
-    PNI_RETURN(res, pni_return_data_type, *pni_return_value);
+    argc = ZEND_NUM_ARGS();
+    if ( argc > 0 ) {
+        args = (zval ***)safe_emalloc(argc, sizeof(zval **), 0);
+        if (zend_get_parameters_array_ex(argc, args) == FAILURE) {
+            efree(args);
+            WRONG_PARAM_COUNT;
+        }
+        trans_args_to_param_list(args, argc, long_param_list, &long_param_count, double_param_list, &double_param_count);
+        efree(args);
+    } else {
+        long_param_count = 0;
+        double_param_count = 0;
+    }
+    /* the key command */
+    pni_return_value = call_native_interface(nativeInterface, long_param_list, long_param_count, double_param_list, double_param_count);
+    pni_return_data_type = Z_LVAL_P(return_data_type);
+    
+    /* return the value according to the return data type */
+    switch (pni_return_data_type) {                                
+        case PNI_DATA_TYPE_VOID :                       
+            RETURN_NULL();                              
+        case PNI_DATA_TYPE_CHAR :                       
+        case PNI_DATA_TYPE_INT :                        
+        case PNI_DATA_TYPE_LONG :                       
+            RETURN_LONG((long)pni_return_value);            
+            break;                                      
+        case PNI_DATA_TYPE_FLOAT :                      
+        case PNI_DATA_TYPE_DOUBLE :                     
+            value_p = &pni_return_value;                           
+            double_value_p = (double *)value_p;         
+            RETURN_DOUBLE(*double_value_p);      
+            break;                                      
+        case PNI_DATA_TYPE_STRING :                     
+        case PNI_DATA_TYPE_POINTER :                    
+            RETURN_STRING((char *)pni_return_value, 1);     
+            break;                                      
+        default :                                       
+            RETURN_NULL();                              
+    }                                                   
 }
 /* }}} */
 
@@ -648,6 +676,7 @@ static void pni_data_type_assign() {
     }
 }
 */
+
 /* trans the parameters value to c array list */
 static void trans_args_to_param_list(zval ***args,const int argc, 
         long * long_param_list, int *long_param_count, 
@@ -656,21 +685,13 @@ static void trans_args_to_param_list(zval ***args,const int argc,
     int long_offset = 0;
     int double_offset = 0;
     int pni_data_type;
-    zval **array;
     zval *zval_value, *zval_data_type;
-    zval *obj;
-    if (0 == argc) {
-        return ;
-    }
-    array = args[0];
-    SEPARATE_ZVAL(array);
-    convert_to_array_ex(array);
-    for (zend_hash_internal_pointer_reset(Z_ARRVAL_PP(array));
-            zend_hash_get_current_data(Z_ARRVAL_PP(array), (void **)&obj) == SUCCESS;
-            zend_hash_move_forward(Z_ARRVAL_PP(array))) {
-
-        zval_value = zend_read_property(Z_OBJCE_P(obj), obj, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), 0 TSRMLS_CC);       
-        zval_data_type = zend_read_property(Z_OBJCE_P(obj), obj, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), 0 TSRMLS_CC);       
+    zval *argObj;
+    int i;
+    for (i = 0; i < argc ; i++) {
+        argObj = *(args[i]);
+        zval_value = zend_read_property(Z_OBJCE_P(argObj), argObj, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), 0 TSRMLS_CC);       
+        zval_data_type = zend_read_property(Z_OBJCE_P(argObj), argObj, ZEND_STRL(PNI_PROPERTY_DATA_TYPE_LABEL), 0 TSRMLS_CC);
         pni_data_type = Z_LVAL_P(zval_data_type);
         switch ( pni_data_type ) {
             case PNI_DATA_TYPE_CHAR :
@@ -705,6 +726,89 @@ static void trans_args_to_param_list(zval ***args,const int argc,
 static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
     void *dlHandle = (void *) rsrc->ptr;
     dlclose(dlHandle);
+}
+
+static void *call_native_interface(NATIVE_INTERFACE_SYMBOL interface, 
+        const long const *long_param_list,                              
+        const int long_param_count,
+        const double const *double_param_list,
+        const int double_param_count
+        ) {
+    void *res;
+    __asm__ __volatile__ (
+            "movq %2, %%rbx\n\t"
+            "cmpq $6, %3\n\t"
+            "je .L_PNI_PARAM_6\n\t"
+            "cmpq $5, %3\n\t"
+            "je .L_PNI_PARAM_5\n\t"
+            "cmpq $4, %3\n\t"
+            "je .L_PNI_PARAM_4\n\t"
+            "cmpq $3, %3\n\t"
+            "je .L_PNI_PARAM_3\n\t"
+            "cmpq $2, %3\n\t"
+            "je .L_PNI_PARAM_2\n\t"
+            "cmpq $1, %3\n\t"
+            "je .L_PNI_PARAM_1\n\t"
+            "cmpq $0, %3\n\t"
+            "je .L_PNI_PARAM_0\n\t"
+        ".L_PNI_PARAM_6:\n\t"
+            "movq 40(%%rbx), %%r9\n\t"
+        ".L_PNI_PARAM_5:\n\t"
+            "movq 32(%%rbx), %%r8\n\t"
+        ".L_PNI_PARAM_4:\n\t"
+            "movq 24(%%rbx), %%rcx\n\t"
+        ".L_PNI_PARAM_3:\n\t"
+            "movq 16(%%rbx), %%rdx\n\t"
+        ".L_PNI_PARAM_2:\n\t"
+            "movq 8(%%rbx), %%rsi\n\t"
+        ".L_PNI_PARAM_1:\n\t"
+            "movq (%%rbx), %%rdi\n\t"
+        ".L_PNI_PARAM_0:\n\t"
+        
+            "movq %4, %%rbx\n\t"
+            "cmpq $8, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_8\n\t"
+            "cmpq $7, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_7\n\t"
+            "cmpq $6, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_6\n\t"
+            "cmpq $5, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_5\n\t"
+            "cmpq $4, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_4\n\t"
+            "cmpq $3, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_3\n\t"
+            "cmpq $2, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_2\n\t"
+            "cmpq $1, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_1\n\t"
+            "cmpq $0, %5\n\t"
+            "je .L_PNI_DOUBLE_PARAM_0\n\t"
+        ".L_PNI_DOUBLE_PARAM_8:\n\t"
+            "movq 56(%%rbx), %%xmm7\n\t"
+        ".L_PNI_DOUBLE_PARAM_7:\n\t"
+            "movq 48(%%rbx), %%xmm6\n\t"
+        ".L_PNI_DOUBLE_PARAM_6:\n\t"
+            "movq 40(%%rbx), %%xmm5\n\t"
+        ".L_PNI_DOUBLE_PARAM_5:\n\t"
+            "movq 32(%%rbx), %%xmm4\n\t"
+        ".L_PNI_DOUBLE_PARAM_4:\n\t"
+            "movq 24(%%rbx), %%xmm3\n\t"
+        ".L_PNI_DOUBLE_PARAM_3:\n\t"
+            "movq 16(%%rbx), %%xmm2\n\t"
+        ".L_PNI_DOUBLE_PARAM_2:\n\t"
+            "movq 8(%%rbx), %%xmm1\n\t"
+        ".L_PNI_DOUBLE_PARAM_1:\n\t"
+            "movq (%%rbx), %%xmm0\n\t"
+        ".L_PNI_DOUBLE_PARAM_0:\n\t"
+
+        ".L_CALL_INTERFACE:\n\t"
+            "call *%1\n\t"
+            "movq %%rax, %0"
+            :"=m" (res)
+            :"m" (interface), "m" (long_param_list), "m" (long_param_count), "m" (double_param_list), "m" (double_param_count));
+
+        return res;
 }
 
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
