@@ -35,8 +35,8 @@
 #define PNI_PROPERTY_LIBNAME_LABEL "_libName"
 #define PNI_PROPERTY_FUNCTIONNAME_LABEL "_functionName"
 #define PNI_PROPERTY_RETURN_DATA_TYPE_LABEL "_returnDataType"
-#define PNI_PROPERTY_DATA_TYPE_LABEL "dataType"
-#define PNI_PROPERTY_VALUE_LABEL "value"
+#define PNI_PROPERTY_DATA_TYPE_LABEL "_dataType"
+#define PNI_PROPERTY_VALUE_LABEL "_value"
 
 #define PNI_DATA_TYPE_VOID      0
 #define PNI_DATA_TYPE_CHAR      1
@@ -101,7 +101,9 @@ static int le_dl_handle_persist;
 /* Local functions */
 static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC);
 static void trans_args_to_param_list(zval ***, const int, long *, int *, double *, int *);
-static void *call_native_interface(NATIVE_INTERFACE_SYMBOL,const long const *, const int ,const double const *, const int);
+static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL,const long const *, const int ,const double const *, const int);
+static void assign_value_to_pni_data(int pni_data_type, PNI_DATA_TYPE_ANY, zval * TSRMLS_CC);
+
 /* asm debug mark */
 
 /* class entry declare */
@@ -125,6 +127,8 @@ PHP_METHOD(PNI, getLibName);
 PHP_METHOD(PNIFunction, __construct);                                      
 PHP_METHOD(PNIFunction, invoke);                                      
 PHP_METHOD(PNIDataType, __construct);                                      
+PHP_METHOD(PNIDataType, getValue);                                      
+PHP_METHOD(PNIDataType, getDataType);                                      
 
 /* {{{ pni_functions[]
  *
@@ -162,6 +166,8 @@ const zend_function_entry pni_exception_functions[] = {
  */
 const zend_function_entry pni_data_type_functions[] = {
     PHP_ME(PNIDataType, __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_ME(PNIDataType, getValue,    NULL, ZEND_ACC_PUBLIC) 
+    PHP_ME(PNIDataType, getDataType,    NULL, ZEND_ACC_PUBLIC) 
     PHP_FE_END 
 };
 /* }}} */
@@ -531,9 +537,9 @@ PHP_METHOD(PNIFunction, __construct) {
 /* }}} */
 
 /* {{{ proto public void PNIFunction::invoke(PNIDataType arg1, ...)
- *   Call the native function . Throws an PNIException. */
+ *   Call the native function.Return PNI value. Throws an PNIException. */
 PHP_METHOD(PNIFunction, invoke) {
-    void *pni_return_value;
+    PNI_DATA_TYPE_ANY pni_return_value;
     int pni_return_data_type;
     zval *self,  *lib_name, *function_name, *return_data_type, *res;
     zval ***args;
@@ -553,7 +559,7 @@ PHP_METHOD(PNIFunction, invoke) {
     double double_param_list[MAX_PNI_FUNCTION_PARAMS];
     int double_param_count;
     NATIVE_INTERFACE_SYMBOL nativeInterface;
-    void ** value_p;                                    
+    PNI_DATA_TYPE_ANY *value_p;                                    
     double * double_value_p;                            
     
     self = getThis();
@@ -601,29 +607,8 @@ PHP_METHOD(PNIFunction, invoke) {
     /* the key command */
     pni_return_value = call_native_interface(nativeInterface, long_param_list, long_param_count, double_param_list, double_param_count);
     pni_return_data_type = Z_LVAL_P(return_data_type);
-    
-    /* return the value according to the return data type */
-    switch (pni_return_data_type) {                                
-        case PNI_DATA_TYPE_VOID :                       
-            RETURN_NULL();                              
-        case PNI_DATA_TYPE_CHAR :                       
-        case PNI_DATA_TYPE_INT :                        
-        case PNI_DATA_TYPE_LONG :                       
-            RETURN_LONG((long)pni_return_value);            
-            break;                                      
-        case PNI_DATA_TYPE_FLOAT :                      
-        case PNI_DATA_TYPE_DOUBLE :                     
-            value_p = &pni_return_value;                           
-            double_value_p = (double *)value_p;         
-            RETURN_DOUBLE(*double_value_p);      
-            break;                                      
-        case PNI_DATA_TYPE_STRING :                     
-        case PNI_DATA_TYPE_POINTER :                    
-            RETURN_STRING((char *)pni_return_value, 1);     
-            break;                                      
-        default :                                       
-            RETURN_NULL();                              
-    }                                                   
+    assign_value_to_pni_data(pni_return_data_type, pni_return_value, return_value);   
+    return;                                                    
 }
 /* }}} */
 
@@ -641,41 +626,30 @@ zval * value;
     zend_update_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), value TSRMLS_CC);
 }
 /* }}} */
-/*
-static void pni_data_type_assign() {
-    zval * value;
-    zval * data_type;
+
+/* {{{ proto public void PNI::__construct($libName)
+ *    Constructor. Throws an PNIException in case the given shared library does not exist */
+PHP_METHOD(PNIDataType, getValue) {
     zval * self;
-    int pni_data_type;
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &value) == FAILURE) {
-        WRONG_PARAM_COUNT;
-    }
+    zval * value;
     self = getThis();
-    data_type = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), 0 TSRMLS_CC);       
-    pni_data_type = Z_LVAL_P(data_type);
-    switch ( pni_data_type ) {
-        case PNI_DATA_TYPE_CHAR :
-        case PNI_DATA_TYPE_INT :
-        case PNI_DATA_TYPE_LONG :
-            convert_to_long(value);
-            zend_update_property_long(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), Z_LVAL_P(value) TSRMLS_CC);
-            break;
-        case PNI_DATA_TYPE_STRING :
-        case PNI_DATA_TYPE_POINTER:
-            convert_to_string(value);
-            zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), Z_STRVAL_P(value) TSRMLS_CC);
-            break;
-        case PNI_DATA_TYPE_FLOAT :
-        case PNI_DATA_TYPE_DOUBLE :
-            convert_to_double(value);
-            zend_update_property_double(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), Z_DVAL_P(value) TSRMLS_CC);
-            break;
-        default :
-            zend_update_property_null(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL) TSRMLS_CC);
-            break;
-    }
+    value = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), 0 TSRMLS_CC);
+    RETURN_ZVAL(value, 1, 0);
 }
-*/
+/* }}} */
+
+/* {{{ proto public void PNI::__construct($libName)
+ *    Constructor. Throws an PNIException in case the given shared library does not exist */
+PHP_METHOD(PNIDataType, getDataType) {
+    zval * self;
+    zval * value;
+    self = getThis();
+    value = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DATA_TYPE_LABEL), 0 TSRMLS_CC);
+    RETURN_ZVAL(value, 1, 0);
+}
+/* }}} */
+
+
 
 /* trans the parameters value to c array list */
 static void trans_args_to_param_list(zval ***args,const int argc, 
@@ -728,7 +702,7 @@ static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
     dlclose(dlHandle);
 }
 
-static void *call_native_interface(NATIVE_INTERFACE_SYMBOL interface, 
+static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL interface, 
         const long const *long_param_list,                              
         const int long_param_count,
         const double const *double_param_list,
@@ -811,6 +785,54 @@ static void *call_native_interface(NATIVE_INTERFACE_SYMBOL interface,
         return res;
 }
 
+ /* return the value according to the return data type */
+static void assign_value_to_pni_data(int pni_data_type, PNI_DATA_TYPE_ANY value, zval *object TSRMLS_CC) {
+    PNI_DATA_TYPE_ANY *value_p;
+    double *double_value_p;
+    if (!object) {
+        ALLOC_ZVAL(object);
+    }
+    if (PNI_DATA_TYPE_VOID == pni_data_type) {
+        ZVAL_NULL(object);
+        return;
+    }
+
+    Z_TYPE_P(object) = IS_OBJECT;
+    switch (pni_data_type) {                                
+        case PNI_DATA_TYPE_CHAR :
+        case PNI_DATA_TYPE_INT :
+            object_init_ex(object, pni_integer_ptr);
+            zend_update_property_long(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), (long)value TSRMLS_CC);
+            break;
+        case PNI_DATA_TYPE_LONG :
+            object_init_ex(object, pni_long_ptr);
+            zend_update_property_long(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), (long)value TSRMLS_CC);
+            break;                                      
+        case PNI_DATA_TYPE_FLOAT :                      
+            object_init_ex(object, pni_float_ptr);
+            value_p = &value;                           
+            double_value_p = (double *)value_p;         
+            zend_update_property_double(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), *double_value_p TSRMLS_CC);
+            break;                                      
+        case PNI_DATA_TYPE_DOUBLE :                     
+            object_init_ex(object, pni_double_ptr);
+            value_p = &value;                           
+            double_value_p = (double *)value_p;         
+            zend_update_property_double(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), *double_value_p TSRMLS_CC);
+            break;                                      
+        case PNI_DATA_TYPE_STRING :                     
+        case PNI_DATA_TYPE_POINTER :                    
+            object_init_ex(object, pni_string_ptr);
+            zend_update_property_string(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), (char *)value TSRMLS_CC);
+            break;                                      
+        default :                                       
+            ZVAL_NULL(object);
+            return;
+    }    
+    Z_SET_REFCOUNT_P(object, 1);
+    Z_SET_ISREF_P(object);
+    return;
+}
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
    unfold functions in source code. See the corresponding marks just before 
    function definition, where the functions purpose is also documented. Please 
