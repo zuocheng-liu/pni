@@ -5,7 +5,5 @@ try {
     $b = new PNIDouble(10);
     $res = $pow($a, $b);
     var_dump($res);
-    var_dump($res);
-    var_dump($res);
 } catch (PNIException $e) {
 }

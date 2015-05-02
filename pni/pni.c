@@ -30,8 +30,9 @@
 
 
 /* function variable and class property lables definination */
-#define PHP_DL_HANDLE_RES_NAME "DL Handle"
+#define PNI_DL_HANDLE_RES_NAME "DL Handle"
 #define MAX_PNI_FUNCTION_PARAMS 255
+#define PNI_PROPERTY_DL_HANDLE_LABEL "_dlHandle"
 #define PNI_PROPERTY_LIBNAME_LABEL "_libName"
 #define PNI_PROPERTY_FUNCTIONNAME_LABEL "_functionName"
 #define PNI_PROPERTY_RETURN_DATA_TYPE_LABEL "_returnDataType"
@@ -93,17 +94,12 @@ ZEND_END_ARG_INFO()
     RETURN_ZVAL((res), 1,0);                            \
 }while (0)
 
-/* If you declare any globals in php_pni.h uncomment this:*/
-ZEND_DECLARE_MODULE_GLOBALS(pni)
-/* True global resources - no need for thread safety here */
-static int le_dl_handle_persist;
-
-/* Local functions */
-static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC);
+/* functions declaration */
+static void pni_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC);
 static void trans_args_to_param_list(zval ***, const int, long *, int *, double *, int *);
 static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL,const long const *, const int ,const double const *, const int);
 static void assign_value_to_pni_data(int pni_data_type, PNI_DATA_TYPE_ANY, zval * TSRMLS_CC);
-
+static int get_persisted_dl_handle (char *, void ** , zval * );
 /* asm debug mark */
 
 /* class entry declare */
@@ -118,6 +114,12 @@ static zend_class_entry *pni_float_ptr;
 static zend_class_entry *pni_double_ptr;
 static zend_class_entry *pni_string_ptr;
 static zend_class_entry *pni_pointer_ptr;
+
+/* If you declare any globals in php_pni.h uncomment this:*/
+ZEND_DECLARE_MODULE_GLOBALS(pni)
+/* True global resources - no need for thread safety here */
+static int le_dl_handle_persist;
+
 
 /* PNI functions */
 PHP_FUNCTION(get_pni_version);
@@ -228,17 +230,18 @@ PHP_MINIT_FUNCTION(pni) {
     /* If you have INI entries, uncomment these lines 
     REGISTER_INI_ENTRIES();
     */
-    le_dl_handle_persist = zend_register_list_destructors_ex(NULL, php_dl_handle_persist_dtor, PHP_DL_HANDLE_RES_NAME, module_number);
+    le_dl_handle_persist = zend_register_list_destructors_ex(NULL, pni_dl_handle_persist_dtor, PNI_DL_HANDLE_RES_NAME, module_number);
     
     /* class PNI */
     INIT_CLASS_ENTRY(pni, "PNI", pni_functions);
     pni_ptr = zend_register_internal_class_ex(&pni, NULL, NULL TSRMLS_CC);
+    //zend_declare_property(pni_ptr, PNI_PROPERTY_DL_HANDLE_LABEL, sizeof(PNI_PROPERTY_DL_HANDLE_LABEL) - 1, NULL, ZEND_ACC_PROTECTED TSRMLS_CC);
     zend_declare_property_string(pni_ptr, PNI_PROPERTY_LIBNAME_LABEL, sizeof(PNI_PROPERTY_LIBNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED TSRMLS_CC);
 
     /* class PNIFunction */
     INIT_CLASS_ENTRY(pni, "PNIFunction", pni_function_functions);
     pni_function_ptr = zend_register_internal_class_ex(&pni, NULL, NULL TSRMLS_CC);
-    zend_declare_property_string(pni_function_ptr, PNI_PROPERTY_LIBNAME_LABEL, sizeof(PNI_PROPERTY_LIBNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED TSRMLS_CC);
+    //zend_declare_property(pni_function_ptr, PNI_PROPERTY_DL_HANDLE_LABEL, sizeof(PNI_PROPERTY_DL_HANDLE_LABEL) - 1, NULL, ZEND_ACC_PROTECTED TSRMLS_CC);
     zend_declare_property_string(pni_function_ptr, PNI_PROPERTY_FUNCTIONNAME_LABEL, sizeof(PNI_PROPERTY_FUNCTIONNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED TSRMLS_CC);
     zend_declare_property_long(pni_function_ptr, PNI_PROPERTY_RETURN_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL) - 1, 0, ZEND_ACC_PROTECTED TSRMLS_CC);
 
@@ -356,49 +359,23 @@ PHP_FUNCTION(get_pni_version) {
 /* {{{ proto public void PNI::__construct($libName)
  *    Constructor. Throws an PNIException in case the given shared library does not exist */
 PHP_METHOD(PNI, __construct) {
-    char *lib_name = NULL;
-    int lib_name_len = 0;
-    zval *self = NULL;
-   
-    char *key = NULL;
-    char * error_msg = NULL;
-    int key_len = 0;
-    void * dlHandle = NULL;
-    zend_rsrc_list_entry *le, new_le;
+    char *lib_name;
+    int lib_name_len;
+    zval *self, *property_dl_handle;
+    void * dl_handle;
     
     /* get the parameter $libName */
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &lib_name, &lib_name_len) == FAILURE) {
+    if ( zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &lib_name, &lib_name_len) == FAILURE ) {
         WRONG_PARAM_COUNT;
     }
-
-    /* get the dl handle, if not exists, create it and persist it */
-    key_len = spprintf(&key, 0, "pni_dl_handle_%s\n", lib_name);
-    if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
-        ZEND_REGISTER_RESOURCE(return_value, le->ptr, le_dl_handle_persist);
-        efree(key);
-        RETURN_TRUE;
-    }
-    
-    /* init the dl handle resource */
-    dlHandle = dlopen(lib_name, RTLD_LAZY);
-    if (!dlHandle) {
-        //php_error_docref(NULL TSRMLS_CC, E_WARNING, "dlopen error (%s) , dl handle resource not created.", dlerror());
-        //RETURN_FALSE;
-        spprintf(&error_msg, 0, "%s,  dl handle resource is not created.", dlerror());
-        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
-        RETURN_FALSE;
-    }
-    /* registe dl handle resource */
-    ZEND_REGISTER_RESOURCE(return_value, &dlHandle, le_dl_handle_persist);
-    /* persist dl handle */
-    new_le.ptr = dlHandle;
-    new_le.type = le_dl_handle_persist;
-    zend_hash_add(&EG(persistent_list), key, key_len + 1, &new_le, sizeof(zend_rsrc_list_entry), NULL);
-    efree(key);
+    ALLOC_INIT_ZVAL(property_dl_handle);
+    if ( FAILURE == get_persisted_dl_handle (lib_name, &dl_handle, property_dl_handle) ) {
+        return;
+    } 
     /* save the libname to private variable */
     self = getThis();
     zend_update_property_stringl(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), lib_name, lib_name_len TSRMLS_CC);
-    RETURN_TRUE;
+    zend_update_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DL_HANDLE_LABEL), property_dl_handle TSRMLS_CC);
 }
 /* }}} */
 
@@ -406,20 +383,20 @@ PHP_METHOD(PNI, __construct) {
 /* {{{ proto public void PNI::__call($functionName, $args)
 Returns a zval pointer */
 PHP_METHOD(PNI, __call) {
-    zval *self,  *lib_name, *args, *res;
+    zval *self,  *lib_name, *args, *res, *property_dl_handle;
     HashTable *arr_hash_tb;
     HashPosition pointer;
     zval **data = NULL;
     int index = 0;
     char * function_name;
     char * error_msg;
-    int argc = 0;
+    int argc;
     int function_name_len = 0;
     zval *argList[MAX_PNI_FUNCTION_PARAMS];
     NATIVE_INTERFACE nativeInterface = NULL;
     char *key = NULL;
     int key_len = 0;
-    void * dlHandle = NULL;
+    void * dl_handle;
     zend_rsrc_list_entry *le, new_le;
 
     self = getThis();
@@ -427,6 +404,8 @@ PHP_METHOD(PNI, __call) {
         WRONG_PARAM_COUNT;
     }
     lib_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), 0 TSRMLS_CC);
+    property_dl_handle = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DL_HANDLE_LABEL), 0 TSRMLS_CC);
+    
     /* trans zend args to c array  */
     arr_hash_tb = Z_ARRVAL_P(args);
     argc = zend_hash_num_elements(arr_hash_tb);
@@ -437,24 +416,14 @@ PHP_METHOD(PNI, __call) {
         index ++;
     }
 
-    /* seek the persisted dl handle */
-    key_len = spprintf(&key, 0, "pni_dl_handle_%s\n", Z_STRVAL_P(lib_name));
-    if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
-        ZEND_REGISTER_RESOURCE(return_value, le->ptr, le_dl_handle_persist);
-        efree(key);
-    }
-    dlHandle = le->ptr;
-    if (!dlHandle) {
-        spprintf(&error_msg, 0, "Fail to dl Native Interface. The PNI dl handle (%s) is invalid.", Z_STRVAL_P(lib_name));
-        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
-        RETURN_FALSE;
-    }
-    
+    ZEND_FETCH_RESOURCE(dl_handle, void *, &property_dl_handle, -1, PNI_DL_HANDLE_RES_NAME, le_dl_handle_persist);  
+
     /* seek dynamic library symbol */
-    nativeInterface = (NATIVE_INTERFACE)dlsym(dlHandle, function_name);
+    nativeInterface = (NATIVE_INTERFACE)dlsym(dl_handle, function_name);
     if (!nativeInterface) {
         spprintf(&error_msg, 0, "Dlsym %s error (%s). ", function_name, dlerror());
         zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
+        efree(error_msg);
         RETURN_FALSE;
     }
 
@@ -480,50 +449,26 @@ PHP_METHOD(PNI, getLibName) {
 /* {{{ proto public void PNIFunction::__construct($returnDataType, $functionName, $libName)
  *    Constructor. Throws an PNIException in case the given shared library does not exist */
 PHP_METHOD(PNIFunction, __construct) {
-    int data_type= 0;
-    char *lib_name = NULL;
-    int lib_name_len = 0;
-    char *function_name = NULL;
-    int function_name_len = 0;
+    int data_type;
+    char *lib_name;
+    int lib_name_len;
+    char *function_name;
+    int function_name_len;
     
-    zval *self = NULL;
+    zval *self, *property_dl_handle;
    
-    char *key = NULL;
-    char * error_msg = NULL;
-    int key_len = 0;
-    void * dlHandle = NULL;
-    zend_rsrc_list_entry *le, new_le;
+    void * dl_handle;
     
     /* get the parameter $libName */
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "lss", &data_type, &function_name, &function_name_len, &lib_name, &lib_name_len) == FAILURE) {
         WRONG_PARAM_COUNT;
     }
 
- 
-    /* get the dl handle, if not exists, create it and persist it */
-    key_len = spprintf(&key, 0, "pni_dl_handle_%s\n", lib_name);
-    if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
-        ZEND_REGISTER_RESOURCE(return_value, le->ptr, le_dl_handle_persist);
-        efree(key);
-        RETURN_TRUE;
-    }
-    
-    /* init the dl handle resource */
-    dlHandle = dlopen(lib_name, RTLD_LAZY);
-    if (!dlHandle) {
-        //php_error_docref(NULL TSRMLS_CC, E_WARNING, "dlopen error (%s) , dl handle resource not created.", dlerror());
-        //RETURN_FALSE;
-        spprintf(&error_msg, 0, "%s,  dl handle resource is not created.", dlerror());
-        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
-        RETURN_FALSE;
-    }
-    /* registe dl handle resource */
-    ZEND_REGISTER_RESOURCE(return_value, &dlHandle, le_dl_handle_persist);
-    /* persist dl handle */
-    new_le.ptr = dlHandle;
-    new_le.type = le_dl_handle_persist;
-    zend_hash_add(&EG(persistent_list), key, key_len + 1, &new_le, sizeof(zend_rsrc_list_entry), NULL);
-    efree(key);
+    /* get the persisted dl handle */
+    ALLOC_INIT_ZVAL(property_dl_handle);
+    if ( FAILURE == get_persisted_dl_handle (lib_name, &dl_handle, property_dl_handle) ) {
+        return;
+    } 
 
     self = getThis();
     /* save the libname to private variable */
@@ -532,7 +477,8 @@ PHP_METHOD(PNIFunction, __construct) {
     zend_update_property_stringl(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_FUNCTIONNAME_LABEL), function_name, function_name_len TSRMLS_CC);
     /* save the data_type to private variable */
     zend_update_property_long(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL), data_type TSRMLS_CC);
-    RETURN_TRUE;
+    /* save the dl handle resource to private variable */   
+    zend_update_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DL_HANDLE_LABEL), property_dl_handle TSRMLS_CC);
 }
 /* }}} */
 
@@ -541,16 +487,13 @@ PHP_METHOD(PNIFunction, __construct) {
 PHP_METHOD(PNIFunction, invoke) {
     PNI_DATA_TYPE_ANY pni_return_value;
     int pni_return_data_type;
-    zval *self,  *lib_name, *function_name, *return_data_type, *res;
+    zval *self,  *lib_name, *function_name, *return_data_type, *res, *property_dl_handle;
     zval ***args;
     int argc;
     HashTable *arr_hash_tb;
     HashPosition pointer;
 
-    char *key;
-    int key_len;
-
-    void * dlHandle;
+    void * dl_handle;
     zend_rsrc_list_entry *le, new_le;
     char * error_msg;
 
@@ -566,27 +509,16 @@ PHP_METHOD(PNIFunction, invoke) {
     lib_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), 0 TSRMLS_CC);
     function_name = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_FUNCTIONNAME_LABEL), 0 TSRMLS_CC);
     return_data_type = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL), 0 TSRMLS_CC);
-
-    /* seek the persisted dl handle */
-    key_len = spprintf(&key, 0, "pni_dl_handle_%s\n", Z_STRVAL_P(lib_name));
-    if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
-        ZEND_REGISTER_RESOURCE(return_value, le->ptr, le_dl_handle_persist);
-        efree(key);
-    }
-
-    dlHandle = le->ptr;
-    if (!dlHandle) {
-        spprintf(&error_msg, 0, "Fail to dl Native Interface. The PNI dl handle (%s) is invalid.", Z_STRVAL_P(lib_name));
-        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
-        efree(args);
-        RETURN_FALSE;
-    }
+    property_dl_handle = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DL_HANDLE_LABEL), 0 TSRMLS_CC);
     
+    ZEND_FETCH_RESOURCE(dl_handle, void *, &property_dl_handle, -1, PNI_DL_HANDLE_RES_NAME, le_dl_handle_persist);  
+
     /* seek dynamic library function symbol */
-    nativeInterface = (NATIVE_INTERFACE_SYMBOL)dlsym(dlHandle, Z_STRVAL_P(function_name));
+    nativeInterface = (NATIVE_INTERFACE_SYMBOL)dlsym(dl_handle, Z_STRVAL_P(function_name));
     if (!nativeInterface) {
         spprintf(&error_msg, 0, "Dlsym %s error (%s). ", Z_STRVAL_P(function_name), dlerror());
         zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
+        efree(error_msg);
         efree(args);
         RETURN_FALSE;
     }
@@ -608,7 +540,6 @@ PHP_METHOD(PNIFunction, invoke) {
     pni_return_value = call_native_interface(nativeInterface, long_param_list, long_param_count, double_param_list, double_param_count);
     pni_return_data_type = Z_LVAL_P(return_data_type);
     assign_value_to_pni_data(pni_return_data_type, pni_return_value, return_value);   
-    return;                                                    
 }
 /* }}} */
 
@@ -649,6 +580,38 @@ PHP_METHOD(PNIDataType, getDataType) {
 }
 /* }}} */
 
+/* get the dl handle, if not exists, create and persist it */
+static int get_persisted_dl_handle (char *lib_name, void ** dl_handle_ptr, zval * z) {
+    char * key;
+    int key_len;
+    char * error_msg;
+    zend_rsrc_list_entry *le, new_le;
+
+    key_len = spprintf(&key, 0, "pni_dl_handle_%s", lib_name);
+    if (zend_hash_find(&EG(persistent_list), key, key_len + 1, (void **)&le) == SUCCESS) {
+        *dl_handle_ptr = le->ptr;
+        ZEND_REGISTER_RESOURCE(z, *dl_handle_ptr, le_dl_handle_persist);
+        efree(key);
+        return SUCCESS;
+    }
+    
+    /* init the dl handle resource */
+    *dl_handle_ptr = dlopen(lib_name, RTLD_LAZY);
+    if (!*dl_handle_ptr) {
+        spprintf(&error_msg, 0, "%s,  dl handle resource is not created.", dlerror());
+        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
+        efree(error_msg);
+        return FAILURE;
+    }
+    /* registe dl handle resource */
+    ZEND_REGISTER_RESOURCE(z, *dl_handle_ptr, le_dl_handle_persist);
+    /* persist dl handle */
+    new_le.ptr = *dl_handle_ptr;
+    new_le.type = le_dl_handle_persist;
+    zend_hash_add(&EG(persistent_list), key, key_len + 1, &new_le, sizeof(zend_rsrc_list_entry), NULL);
+    efree(key);
+    return SUCCESS;
+}
 
 
 /* trans the parameters value to c array list */
@@ -697,7 +660,7 @@ static void trans_args_to_param_list(zval ***args,const int argc,
 }
 
 /* release the dl resource */
-static void php_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
+static void pni_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
     void *dlHandle = (void *) rsrc->ptr;
     dlclose(dlHandle);
 }
