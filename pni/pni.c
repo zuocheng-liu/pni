@@ -490,8 +490,6 @@ PHP_METHOD(PNIFunction, invoke) {
     zval *self,  *lib_name, *function_name, *return_data_type, *res, *property_dl_handle;
     zval ***args;
     int argc;
-    HashTable *arr_hash_tb;
-    HashPosition pointer;
 
     void * dl_handle;
     zend_rsrc_list_entry *le, new_le;
