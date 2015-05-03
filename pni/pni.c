@@ -66,39 +66,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_pni_function_invoke, 0, 0, 0)
      ZEND_ARG_INFO(0, ...)
 ZEND_END_ARG_INFO()
 
-/* macro */
-#define PNI_RETURN(res, data_type, value) do {          \
-    void ** value_p;                                    \
-    double * double_value_p;                            \
-    switch (data_type) {                                \
-        case PNI_DATA_TYPE_VOID :                       \
-            RETURN_NULL();                              \
-        case PNI_DATA_TYPE_CHAR :                       \
-        case PNI_DATA_TYPE_INT :                        \
-        case PNI_DATA_TYPE_LONG :                       \
-            ZVAL_LONG((res), (long)(value));            \
-            break;                                      \
-        case PNI_DATA_TYPE_FLOAT :                      \
-        case PNI_DATA_TYPE_DOUBLE :                     \
-            value_p = &value;                           \
-            double_value_p = (double *)value_p;         \
-            ZVAL_DOUBLE((res), (*double_value_p));      \
-            break;                                      \
-        case PNI_DATA_TYPE_STRING :                     \
-        case PNI_DATA_TYPE_POINTER :                    \
-            ZVAL_STRING((res), (char *)(value), 1);     \
-            break;                                      \
-        default :                                       \
-            RETURN_NULL();                              \
-    }                                                   \
-    RETURN_ZVAL((res), 1,0);                            \
-}while (0)
-
 /* functions declaration */
 static void pni_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC);
 static void trans_args_to_param_list(zval ***, const int, long *, int *, double *, int *);
 static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL,const long const *, const int ,const double const *, const int);
-static void assign_value_to_pni_data(int pni_data_type, PNI_DATA_TYPE_ANY, zval * TSRMLS_CC);
+static void assign_value_to_pni_return_data(int pni_data_type, PNI_DATA_TYPE_ANY, zval * TSRMLS_CC);
 static int get_persisted_dl_handle (char *, void ** , zval * );
 /* asm debug mark */
 
@@ -537,14 +509,14 @@ PHP_METHOD(PNIFunction, invoke) {
     /* the key command */
     pni_return_value = call_native_interface(nativeInterface, long_param_list, long_param_count, double_param_list, double_param_count);
     pni_return_data_type = Z_LVAL_P(return_data_type);
-    assign_value_to_pni_data(pni_return_data_type, pni_return_value, return_value);   
+    assign_value_to_pni_return_data(pni_return_data_type, pni_return_value, return_value);   
 }
 /* }}} */
 
 /* {{{ proto public void PNI::__construct($libName)
  *    Constructor. Throws an PNIException in case the given shared library does not exist */
 PHP_METHOD(PNIDataType, __construct) {
-zval * value;
+    zval * value;
     zval * data_type;
     zval * self;
     int pni_data_type;
@@ -574,7 +546,7 @@ PHP_METHOD(PNIDataType, getDataType) {
     zval * value;
     self = getThis();
     value = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DATA_TYPE_LABEL), 0 TSRMLS_CC);
-    RETURN_ZVAL(value, 1, 0);
+    RETURN_LONG(Z_LVAL_P(value));
 }
 /* }}} */
 
@@ -747,7 +719,7 @@ static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL interface
 }
 
  /* return the value according to the return data type */
-static void assign_value_to_pni_data(int pni_data_type, PNI_DATA_TYPE_ANY value, zval *object TSRMLS_CC) {
+static void assign_value_to_pni_return_data(int pni_data_type, PNI_DATA_TYPE_ANY value, zval *object TSRMLS_CC) {
     PNI_DATA_TYPE_ANY *value_p;
     double *double_value_p;
     if (!object) {
@@ -792,7 +764,6 @@ static void assign_value_to_pni_data(int pni_data_type, PNI_DATA_TYPE_ANY value,
     }    
     Z_SET_REFCOUNT_P(object, 1);
     Z_SET_ISREF_P(object);
-    return;
 }
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
    unfold functions in source code. See the corresponding marks just before 
