@@ -72,6 +72,7 @@ static void trans_args_to_param_list(zval ***, const int, long *, int *, double 
 static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL,const long const *, const int ,const double const *, const int);
 static void assign_value_to_pni_return_data(int pni_data_type, PNI_DATA_TYPE_ANY, zval * TSRMLS_CC);
 static int get_persisted_dl_handle (char *, void ** , zval * );
+static inline int pni_data_factory(int, zval * TSRMLS_DC);
 /* asm debug mark */
 
 /* class entry declare */
@@ -100,9 +101,17 @@ PHP_METHOD(PNI, __call);
 PHP_METHOD(PNI, getLibName);
 PHP_METHOD(PNIFunction, __construct);                                      
 PHP_METHOD(PNIFunction, invoke);                                      
-PHP_METHOD(PNIDataType, __construct);                                      
+
 PHP_METHOD(PNIDataType, getValue);                                      
 PHP_METHOD(PNIDataType, getDataType);                                      
+
+PHP_METHOD(PNIChar, __construct);                                      
+PHP_METHOD(PNIInteger, __construct);                                      
+PHP_METHOD(PNILong, __construct);                                      
+PHP_METHOD(PNIFloat, __construct);                                      
+PHP_METHOD(PNIDouble, __construct);                                      
+PHP_METHOD(PNIString, __construct);                                      
+PHP_METHOD(PNIPointer, __construct);                                      
 
 /* {{{ pni_functions[]
  *
@@ -139,16 +148,41 @@ const zend_function_entry pni_exception_functions[] = {
 /* {{{ pni_data_type_functions[]
  */
 const zend_function_entry pni_data_type_functions[] = {
-    PHP_ME(PNIDataType, __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
-    PHP_ME(PNIDataType, getValue,    NULL, ZEND_ACC_PUBLIC) 
+    PHP_ME(PNIDataType, getValue,       NULL, ZEND_ACC_PUBLIC) 
     PHP_ME(PNIDataType, getDataType,    NULL, ZEND_ACC_PUBLIC) 
     PHP_FE_END 
 };
 /* }}} */
 
-
-
-
+const zend_function_entry pni_char_functions[] = {
+    PHP_ME(PNIChar,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_FE_END 
+};
+const zend_function_entry pni_integer_functions[] = {
+    PHP_ME(PNIInteger,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_FE_END 
+};
+const zend_function_entry pni_long_functions[] = {
+    PHP_ME(PNILong,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_FE_END 
+};
+const zend_function_entry pni_float_functions[] = {
+    PHP_ME(PNIFloat,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_FE_END 
+};
+const zend_function_entry pni_double_functions[] = {
+    PHP_ME(PNIDouble,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_FE_END 
+};
+const zend_function_entry pni_string_functions[] = {
+    PHP_ME(PNIString,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_FE_END 
+};
+const zend_function_entry pni_pointer_functions[] = {
+    PHP_ME(PNIPointer,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
+    PHP_FE_END 
+};
+ 
 /* {{{ pni_module_entry
  */
 zend_module_entry pni_module_entry = {
@@ -236,38 +270,38 @@ PHP_MINIT_FUNCTION(pni) {
     zend_declare_property_null(pni_data_type_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     /* class PNIInteger */
-    INIT_CLASS_ENTRY(pni, "PNIInteger", pni_data_type_functions);
-    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    INIT_CLASS_ENTRY(pni, "PNIInteger", pni_integer_functions);
+    pni_integer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, "PNIDataType" TSRMLS_CC);
     zend_declare_property_long(pni_integer_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_INT, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     /* class PNILong */
-    INIT_CLASS_ENTRY(pni, "PNILong", pni_data_type_functions);
-    pni_long_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    INIT_CLASS_ENTRY(pni, "PNILong", pni_long_functions);
+    pni_long_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, "PNIDataType" TSRMLS_CC);
     zend_declare_property_long(pni_long_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_LONG, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     /* class PNIChar */
-    INIT_CLASS_ENTRY(pni, "PNIChar", pni_data_type_functions);
-    pni_char_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    INIT_CLASS_ENTRY(pni, "PNIChar", pni_char_functions);
+    pni_char_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, "PNIDataType" TSRMLS_CC);
     zend_declare_property_long(pni_char_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_CHAR, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     /* class PNIFloat */
-    INIT_CLASS_ENTRY(pni, "PNIFloat", pni_data_type_functions);
-    pni_float_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    INIT_CLASS_ENTRY(pni, "PNIFloat", pni_float_functions);
+    pni_float_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, "PNIDataType" TSRMLS_CC);
     zend_declare_property_long(pni_float_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_FLOAT, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     /* class PNIDouble */
-    INIT_CLASS_ENTRY(pni, "PNIDouble", pni_data_type_functions);
-    pni_double_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    INIT_CLASS_ENTRY(pni, "PNIDouble", pni_double_functions);
+    pni_double_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, "PNIDataType" TSRMLS_CC);
     zend_declare_property_long(pni_double_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_DOUBLE, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     /* class PNIString */
-    INIT_CLASS_ENTRY(pni, "PNIString", pni_data_type_functions);
-    pni_string_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    INIT_CLASS_ENTRY(pni, "PNIString", pni_string_functions);
+    pni_string_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, "PNIDataType" TSRMLS_CC);
     zend_declare_property_long(pni_string_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_STRING, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     /* class PNIPointer */
-    INIT_CLASS_ENTRY(pni, "PNIPointer", pni_data_type_functions);
-    pni_pointer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, NULL TSRMLS_CC);
+    INIT_CLASS_ENTRY(pni, "PNIPointer", pni_pointer_functions);
+    pni_pointer_ptr = zend_register_internal_class_ex(&pni, pni_data_type_ptr, "PNIDataType" TSRMLS_CC);
     zend_declare_property_long(pni_pointer_ptr, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL) - 1, PNI_DATA_TYPE_POINTER, ZEND_ACC_PROTECTED TSRMLS_CC);
     
     return SUCCESS;
@@ -513,18 +547,53 @@ PHP_METHOD(PNIFunction, invoke) {
 }
 /* }}} */
 
-/* {{{ proto public void PNI::__construct($libName)
- *    Constructor. Throws an PNIException in case the given shared library does not exist */
-PHP_METHOD(PNIDataType, __construct) {
-    zval * value;
-    zval * data_type;
-    zval * self;
-    int pni_data_type;
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &value) == FAILURE) {
-        WRONG_PARAM_COUNT;
-    }
-    self = getThis();
-    zend_update_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), value TSRMLS_CC);
+
+/* {{{ proto public void PNIInteger::__construct($value)
+ *    Constructor. Throws an PNIException in case value is illegal */
+PHP_METHOD(PNIChar, __construct) {
+    pni_data_factory(ht, getThis() TSRMLS_CC);
+}
+/* }}} */
+
+/* {{{ proto public void PNIInteger::__construct($value)
+ *    Constructor. Throws an PNIException in case value is illegal */
+PHP_METHOD(PNIInteger, __construct) {
+    pni_data_factory(ht, getThis() TSRMLS_CC);
+}
+/* }}} */
+
+/* {{{ proto public void PNIInteger::__construct($value)
+ *    Constructor. Throws an PNIException in case value is illegal */
+PHP_METHOD(PNILong, __construct) {
+    pni_data_factory(ht, getThis() TSRMLS_CC);
+}
+/* }}} */
+
+/* {{{ proto public void PNIInteger::__construct($value)
+ *    Constructor. Throws an PNIException in case value is illegal */
+PHP_METHOD(PNIFloat, __construct) {
+    pni_data_factory(ht, getThis() TSRMLS_CC);
+}
+/* }}} */
+
+/* {{{ proto public void PNIInteger::__construct($value)
+ *    Constructor. Throws an PNIException in case value is illegal */
+PHP_METHOD(PNIDouble, __construct) {
+    pni_data_factory(ht, getThis() TSRMLS_CC);
+}
+/* }}} */
+
+/* {{{ proto public void PNIInteger::__construct($value)
+ *    Constructor. Throws an PNIException in case value is illegal */
+PHP_METHOD(PNIString, __construct) {
+    pni_data_factory(ht, getThis() TSRMLS_CC);
+}
+/* }}} */
+
+/* {{{ proto public void PNIInteger::__construct($value)
+ *    Constructor. Throws an PNIException in case value is illegal */
+PHP_METHOD(PNIPointer, __construct) {
+    pni_data_factory(ht, getThis() TSRMLS_CC);
 }
 /* }}} */
 
@@ -765,6 +834,38 @@ static void assign_value_to_pni_return_data(int pni_data_type, PNI_DATA_TYPE_ANY
     Z_SET_REFCOUNT_P(object, 1);
     Z_SET_ISREF_P(object);
 }
+
+/* {{{ pni_data_factory */
+static inline int pni_data_factory(int ht, zval *object TSRMLS_DC) {
+    zval *value;
+    zval *property_data_type = zend_read_property(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_DATA_TYPE_LABEL), 0 TSRMLS_CC);
+    int pni_data_type = Z_LVAL_P(property_data_type);
+    
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &value) == FAILURE) {
+        return FAILURE;
+    }
+    switch (pni_data_type) {
+        case PNI_DATA_TYPE_CHAR :
+        case PNI_DATA_TYPE_INT :
+        case PNI_DATA_TYPE_LONG :
+            convert_to_long(value);
+            break;
+        case PNI_DATA_TYPE_FLOAT :                      
+        case PNI_DATA_TYPE_DOUBLE :                     
+            convert_to_double(value);
+            break;                                      
+        case PNI_DATA_TYPE_STRING :                     
+        case PNI_DATA_TYPE_POINTER :                    
+            convert_to_string(value);
+            break;                                      
+        default :                                       
+            return FAILURE;
+    }
+    zend_update_property(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), value TSRMLS_CC);
+    return SUCCESS;
+}
+/* }}}*/
+
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
    unfold functions in source code. See the corresponding marks just before 
    function definition, where the functions purpose is also documented. Please 
