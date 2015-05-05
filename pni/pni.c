@@ -569,9 +569,9 @@ PHP_METHOD(PNILong, __construct) {
 }
 /* }}} */
 
-/* {{{ proto public void PNIInteger::__construct($value)
+/* {{{ proto public void PNIFloat::__construct($value)
  *    Constructor. Throws an PNIException in case value is illegal */
-PHP_METHOD(PNIInteger, __construct) {
+PHP_METHOD(PNIFloat, __construct) {
     pni_data_factory(ht, getThis() TSRMLS_CC);
 }
 /* }}} */
