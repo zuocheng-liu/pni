@@ -571,26 +571,26 @@ PHP_METHOD(PNILong, __construct) {
 
 /* {{{ proto public void PNIInteger::__construct($value)
  *    Constructor. Throws an PNIException in case value is illegal */
-PHP_METHOD(PNIFloat, __construct) {
+PHP_METHOD(PNIInteger, __construct) {
     pni_data_factory(ht, getThis() TSRMLS_CC);
 }
 /* }}} */
 
-/* {{{ proto public void PNIInteger::__construct($value)
+/* {{{ proto public void PNIDouble::__construct($value)
  *    Constructor. Throws an PNIException in case value is illegal */
 PHP_METHOD(PNIDouble, __construct) {
     pni_data_factory(ht, getThis() TSRMLS_CC);
 }
 /* }}} */
 
-/* {{{ proto public void PNIInteger::__construct($value)
+/* {{{ proto public void PNIString::__construct($value)
  *    Constructor. Throws an PNIException in case value is illegal */
 PHP_METHOD(PNIString, __construct) {
     pni_data_factory(ht, getThis() TSRMLS_CC);
 }
 /* }}} */
 
-/* {{{ proto public void PNIInteger::__construct($value)
+/* {{{ proto public void PNIPointer::__construct($value)
  *    Constructor. Throws an PNIException in case value is illegal */
 PHP_METHOD(PNIPointer, __construct) {
     pni_data_factory(ht, getThis() TSRMLS_CC);
@@ -837,11 +837,15 @@ static void assign_value_to_pni_return_data(int pni_data_type, PNI_DATA_TYPE_ANY
 
 /* {{{ pni_data_factory */
 static inline int pni_data_factory(int ht, zval *object TSRMLS_DC) {
+    char * error_msg;
     zval *value;
     zval *property_data_type = zend_read_property(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_DATA_TYPE_LABEL), 0 TSRMLS_CC);
     int pni_data_type = Z_LVAL_P(property_data_type);
     
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &value) == FAILURE) {
+        spprintf(&error_msg, 0, "Parameter error");
+        zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
+        efree(error_msg);
         return FAILURE;
     }
     switch (pni_data_type) {
@@ -858,7 +862,10 @@ static inline int pni_data_factory(int ht, zval *object TSRMLS_DC) {
         case PNI_DATA_TYPE_POINTER :                    
             convert_to_string(value);
             break;                                      
-        default :                                       
+        default : 
+            spprintf(&error_msg, 0, "Unknow PNI data type");
+            zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
+            efree(error_msg);
             return FAILURE;
     }
     zend_update_property(Z_OBJCE_P(object), object, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), value TSRMLS_CC);
