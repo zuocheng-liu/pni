@@ -7,13 +7,14 @@ It resembles Java Native Interface (JNI).
 
 ## Outline
 
-- Outline
-- Purpose & Features
-- Pitfalls
-- Tutorial & Examples
-- Installation
-- Develpment
-- Other
+- [Purpose & Features](#Purpose & Features)
+- [Pitfalls](#Pitfalls)
+- [Tutorial](#)
+- [Examples](#)
+- [PNI Data Type Map](#)
+- [Installation](#)
+- [Develpment](#)
+- [Other](#)
 
 ##  Purpose & Features
 
@@ -43,19 +44,59 @@ Compared with developing PHP extension , developing native interface just like w
 Developers has no need to learn the PHP-API, Zend-API or PHP extension framework any more. 
 Data types and PNI framework are more simple.
 
-- Flexible
-
-PHP-API and Zend API are also available in native interface.
-
 - Scalable
 
 Increasing native interface has no effect on current PHP service.
 
 ## Pitfalls
 
-## Tutorial & Examples
+## Tutorial 
 
-### 1.Write the C/C++ code
+### Classes and methods
+
+- PNIFunction
+- PNIException
+- PNIDataType
+- PNIInteger
+- PNILong
+- PNIDouble
+- PNICHar
+- PNIString
+
+### Predefined constants
+
+```php
+PNIDataType::VOID
+PNIDataType::CHAR
+PNIDataType::INTEGER
+PNIDataType::LONG
+PNIDataType::FLOAT
+PNIDataType::DOUBLE
+PNIDataType::POINTER
+```
+
+
+
+
+## Examples
+
+### Example 1 , call system function :
+
+```php
+try {
+    $pow = new PNIFunction(PNIDataType::DOUBLE, 'pow', 'libm.so.6');
+    $a = new PNIDouble(2);
+    $b = new PNIDouble(10);
+    $res = $pow($a, $b);
+    var_dump($res);
+} catch (PNIException $e) {
+}
+```
+
+### Example 2 :
+
+- 1.Write the C/C++ code
+
 ```C++
 // file pni_math.c
 #include<math.h>
@@ -79,11 +120,12 @@ zval *PNI_pow(zval **args, int argc) {
     return res;
 }
 ```
-### 2.Create the shared library file and move it to the directory which `$LD_LIBRARY_PATH` contains.
+- 2.Create the shared library file and move it to the directory which `$LD_LIBRARY_PATH` contains.
+- 
 ```shell
 php-ni -lm -o libpnimath.so pni_math.c
 ```
-### 3.Create PHP code
+- 3.Create PHP code
 
 ```php
 // file testPni.php
@@ -99,7 +141,7 @@ try {
 }
 
 ```
-### 4.Run the PHP script
+- 4.Run the PHP script
 
 ```shell
 $ php testPni.php 
@@ -108,46 +150,32 @@ $ php testPni.php
 the output as below
 
 ```shell
-float(64)
-string(154) "Dlopen /unexisted/library.so error (/unexisted/library.so: cannot open shared object file: No such file or directory),  dl handle resource is not created."
-string(69) "#0 /root/pni.php(5): PNI->__construct('/unexisted/libr...')
-#1 {main}"
-```
-
-### How to get data from zval?
-
-All the operator macros are defined in the Zend APIs. 
-
-```c
-Z_LVAL_P(zval_p)   // get Long(no int)
-Z_BVAL_P(zval_p)   // get Boolean
-Z_DVAL_P(zval_p)   // get Double
-Z_STRVAL_P(zval_p) // get char *
-Z_STRLEN_P(zval_p) // get the length of a string / Long
-```
-### How to assign a value to the return variable
-
-Thus the PNI function return variable is zval,first of all, you need to initialise it by using  `ALLOC_INIT_ZVAL(res)`. And then, assign the value to it.
 
 ```
-ZVAL_NULL(z)      // assign NULL
-ZVAL_LONG(z, l)    // assign LONG
-ZVAL_STRING(z, s, duplicate)     //assign a string/char * . Duplicate ? always be 1.
-ZVAL_STRINGL(z, s, l, duplicate) //assign a string with fixed length. Duplicate ? always be 1.
-ZVAL_FALSE(z)
-ZVAL_TRUE(z)
-ZVAL_BOOL(z, boolean)    // ZVAL_BOOL(z, 1) and ZVAL_TRUE(z) are the same.Likely, ZVAL_BOOL(z, 0) and ZVAL_FALSE(z) are the same too.
-```
 
-It's unnecessary to know more about Zend APIs or PHP APIs. All referred above is ample to help us achieve the simple communication between PHP code and C code. 
+## PNI Data Type Map
 
-## Requirements
+PNI data type class  | C data type | remark
+------------| ----------	| ----------
+PNILong   	| long int/ int	| PHP has no unsigned int 
+PNIInteger  | long int/ int | PHP has no 32bit Int
+PNIDouble  	| double / float| 
+PNIFloat  	| double / float| PHP has no 32bit float
+PNIChar  	| char 			| 
+PNIString  	| char* 		|
+PNIPointer  | char* 		|
 
-* PHP 5.3 or higher, PHP 5.2 untested
-*  *NIX Platform 
-* windows untested.
+Does PNI really make sense? Yes. Believe me.  PNI has less data types than C,but int and long int are stored in the same type, 64bit CPU register when a function is called. So as float and double.
 
 ## Installation 
+
+### Requirements
+
+* PHP 5.3 or higher, PHP 7 unsupported
+* GCC compiler
+* Architecture x86_64
+
+### Steps
 
 - Download the code source
 
