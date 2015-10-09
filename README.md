@@ -29,7 +29,7 @@ PNI allows programmers to use native code when an application cannot be written 
 
 ### Compared with PHP Extension
 
-As most PHPers known, It is a tranditional way to call C/C++ that to write PHP extension. However, PNI has multiple virtues:
+As most PHPers known, It is a conventional way to call C/C++ that to write PHP extension. However, PNI has multiple virtues:
 
 - Reduce maintenance cost
 

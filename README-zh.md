@@ -5,7 +5,7 @@ PHP Native Interface
 
 - PHP 的一个C扩展
 - 通过它，可以让PHP调用其他语言写的程序，比如C/C++、汇编等等
-- 需要PHP来调用，但PHP有限使用的领域里，PNI可以发挥用处，比如统计学习、神经网络、实时性要求高的程序等等
+- 需要PHP来调用，但PHP有限使用的领域里，PNI可以发挥用处，比如图像处理、统计学习、神经网络、实时性要求高的程序等等
 
 ## 使用场景
 
@@ -16,44 +16,61 @@ PHP 不是完美的语言，总有一些情况下，不得不使用其他语言�
 - 基于平台特性的代码，不能用PHP实现的
 - 调用系统的动态链接库
 
-## Compared with PHP Extension
+## 与直接编写PHP扩展相比
 
-As most PHPers known, It is a tranditional way to call C/C++ that to write PHP extension. However, PNI has multiple virtues:
+直接编写PHP扩展去调用其他语言的接口是常用方法，不过PNI有更多的好处：
 
-- Reduce maintenance cost
+- 降低开发和运维成本
 
-It's a risk of restarting the PHP service when install or update a new PHP extension, especially while operating the PHP cluster. But with PNI, we just change the local interface library.
+不需要每次有新的需求，就去编写或改动PHP的扩展，对PHP扩展的开发、调试会占用很多的时间。
+PHP扩展更改后上线，需要重启PHP服务，这是有一定风险的。
+而使用PNI，就会便捷很多，对新功能的开发和上线，只需操作PHP的代码即可。
 
-- Reduce development cost
+- 降低学习成本
 
-Compared with developing PHP extension , developing native interface just like write native C/C++.
+开发PHP扩展，需要开发人员去学习 PHP-API、 Zend-API 、 PHP扩展框架，甚至需要深入去理解PHP内核。
+有了PNI，问题就简单多了。
 
-- Reduce learning cost
+- 灵活性
 
-Developers has no need to learn the PHP-API, Zend-API or PHP extension framework any more. 
-Data types and PNI framework are more simple.
-
-- Scalable
-
-Increasing native interface has no effect on current PHP service.
-
-## 缺点
+使用PNI，可以更灵活地使用本地类库。
 
 ## 使用手册 
 
 ### 类和方法列表
 
 - PNIFunction
+
+方法类，此类定位动态链接库中的函数名
+```php
+$pow = new PNIFunction(PNIDataType::DOUBLE, 'pow', 'libm.so.6');
+```
+上面的例子，在构造函数中，第一个参数是需要找寻函数的返回值类型，第二参数是函数的名字，第三个参数是到那个动态链接库中找寻函数。
+
 - PNIException
+
+异常类，在无法找到动态链接库或函数名的时候，会抛出异常。
+
+数据类型类
+
 - PNIDataType
 - PNIInteger
 - PNILong
 - PNIDouble
-- PNICHar
+- PNIFLOAT
+- PNIChar
 - PNIString
+- PNIPointer
+
+所有数据类型类都继承PNIDataType抽象类，此抽象类包含两个共有方法
+```php
+getValue(); // 获取值
+getDataType(); // 获取数据类型
+```
 
 ### 定义的常量
 
+表示数据类型常量
 ```php
 PNIDataType::VOID
 PNIDataType::CHAR
@@ -63,9 +80,6 @@ PNIDataType::FLOAT
 PNIDataType::DOUBLE
 PNIDataType::POINTER
 ```
-
-
-
 
 ## 示例
 
@@ -82,37 +96,22 @@ try {
 }
 ```
 
+上面例子，使用PNI调用系统math库中的pow函数
+
 ### 示例 2，调用自己定义的C/C++ 逻辑 :
 
 - 1.构建C程序
 
 ```C++
-// file pni_math.c
-#include<math.h>
-#include "php.h"
-
-/* 
- * double pow(double x, double y); 
- * every PNI function returns zval(php variable) , the paramters are in the args
- */
-zval *PNI_pow(zval **args, int argc) {
-    zval *tmp, *res;
-    double x,y,z;
-    tmp = args[0];     
-    x = Z_DVAL_P(tmp);  // get the double value via Z_DVAL_P
-    tmp = args[1];
-    y = Z_DVAL_P(tmp); // Why we write it like this instead of `y = Z_DVAL_P(args[1]);`? It's a C Trap.
-    
-    z = pow(x,y);    // Function pow is the target.
-    ALLOC_INIT_ZVAL(res);  //  It's essential to init return value unless the return value is NULL.
-    ZVAL_DOUBLE(res, z);   // Use ZVAL_DOUBLE to assign the result to the return variable，the data type is double.
-    return res;
+// file user_math.c
+u_int32_t sum(u_int32_t a, u_int32_t b) {
+    return a + b;
 }
 ```
-- 2.创建动态链接库，并把它放到 `$LD_LIBRARY_PATH` 定义的目录里
+- 2.创建动态链接库，并把它放到 `$LD_LIBRARY_PATH` 包含的目录里
 - 
 ```shell
-php-ni -lm -o libpnimath.so pni_math.c
+gcc -fPIC -shared -o libusermath.so user_math.c
 ```
 - 3.创建PHP程序
 
@@ -120,13 +119,12 @@ php-ni -lm -o libpnimath.so pni_math.c
 // file testPni.php
 <?php
 try {
-    $pni = new PNI('libpnimath.so');
-    var_dump($pni->PNI_pow(2.0,6.0));
-    $noPni = new PNI('/unexisted/library.so');
-    var_dump($pni->unDefinedFunction(2.0,6.0));
+    $sum = new PNIFunction(PNIDataType::INTEGER, 'sum', 'libusermath.so');
+    $a = new PNIInteger(2);
+    $b = new PNIInteger(10);
+    $res = $sum($a, $b);
+    var_dump($res);
 } catch (PNIException $e) {
-    var_dump($e->getMessage());
-    var_dump($e->getTraceAsString());
 }
 
 ```
@@ -135,16 +133,10 @@ try {
 ```shell
 $ php testPni.php 
 ```
-
-输出如下：
-
-```shell
-
-```
-
+$res 是 PNIInteger类型，其中包含数值结果为12的成员变量
 ## PNI 数据类型和C语言数据类型对照
 
-PNI data type class  | C data type | remark
+PNI 数据类型类  | C 数据类型 | 说明
 ------------| ----------	| ----------
 PNILong   	| long int/ int	| PHP has no unsigned int 
 PNIInteger  | long int/ int | PHP has no 32bit Int
@@ -154,24 +146,33 @@ PNIChar  	| char 			|
 PNIString  	| char* 		|
 PNIPointer  | char* 		|
 
-Does PNI really make sense? Yes. Believe me.  PNI has less data types than C,but int and long int are stored in the same type, 64bit CPU register when a function is called. So as float and double.
+由于PHP只有64整形，所以PNILong 和 PNIInteger 实际上是等效的。
+如果通过PNI调用的函数参数类型是32位、16位数据怎么办？需要编码的时候，保证PNILong和PNIInteger存放的值不能超出大小。
+PNIDouble 和 PNIFloat 也是等效的因为PHP只有64位浮点。如果是掉用的C函数参数有32位浮点呢? 不用担心，即使是32位的浮点，在x86_64架构的CPU里，也是赋给了64位的浮点运算器。
+
+## 缺点或注意事项
+
+- 目前还不支持PHP7 ，但作者会争取尽快开发适用PHP7版本的PNI
+- 如果PHP是多线程运行，需要注意PNI调用的动态链接库是否是线程安全的
+- 对于在动态链接库中申请的资源，要及时释放
+- 目前PNI还不支持对复杂数据类型的操作，比如struct，C++的类等
 
 ## 如何安装 
 
 ### Requirements
 
-* PHP 5.3 or higher, PHP 7 unsupported
-* GCC compiler
-* Architecture x86_64
+* PHP 5.3 以上版本, 但不包含PHP 7 
+* 必须是GCC编译器
+* CPU 必须是x86_64架构或被兼容的架构
 
 ### 安装步骤
 
-- Download the code source
+- 下载
 
 ```shell
 git clone https://github.com/zuocheng-liu/pni.git
 ```
-- Complie the pni extension code and install
+- 编译和安装
 
 ```shell
 cd <src-pni>
@@ -179,36 +180,37 @@ phpize
 ./configure
 make && make install
 ```
-- Make PNI work
+- 配置PHP，使其生效
 
-add the line below to php.ini
+把下面一行添加到 php.ini
 
 ```shell
 extension=pni.so;
 ```
-- Restart PHP service
+- 重启PHP服务
 
 ```bash
 service php-fpm restart  // cgi mode
 apachectl restart   // sapi mode 
 // do nothing in cli mode
 ```
-## Development
+## 开发
 
-### Reporting bugs and contributing code
+### 提出建议和提交Bug
 
-Contributions to PNI are highly appreciated either in the form of pull requests for new features, bug fixes, or just bug reports.
+热盼您的联系！
 
-## Other
+## 其他
 
-### Related links
+### 网址
 
-- [Source code](https://github.com/zuocheng-liu/pni)
+- [源代码](https://github.com/zuocheng-liu/pni)
 
-### Author 
+### 作者联系方式 
 
 - Zuocheng Liu <zuocheng.liu@gmail.com>
+- [新浪微博](http://weibo.com/zuocheng1990)
 
-### License
+### 协议
 
-The code for PNI is distributed under the terms of version 3.01 of the PHP license.([see LICENSE](http://php.net/license/3_01.txt))
+version 3.01 of the PHP license.([see LICENSE](http://php.net/license/3_01.txt))
