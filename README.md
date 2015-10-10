@@ -5,7 +5,7 @@ PHP Native Interface (PNI) is a PHP extension that enables PHP code to call and 
 
 It resembles Java Native Interface (JNI).
 
-[简体中文版README](README-zh.md)
+[简体中文版 README](README-zh.md)
 
 ##  Purpose & Features
 
@@ -46,13 +46,44 @@ Increasing native interface has no effect on current PHP service.
 ### Classes and methods
 
 - PNIFunction
+
+```php
+$pow = new PNIFunction(PNIDataType::DOUBLE, 'pow', 'libm.so.6');
+```
+Query and localize the function in library.
+
+Parameter 1 is the function's return data type.
+
+Parameter 2 is the function's name.
+
+Parameter 3 is the library's name.
+
+
 - PNIException
+
+Be throwed when library or function is not existed.
+
+Data type class :
 - PNIDataType
 - PNIInteger
 - PNILong
 - PNIDouble
 - PNICHar
 - PNIString
+- PNIPointer
+
+All pni data type class are based on PNIDataType.It has two public methods :
+```php
+getValue();  // get Zend variable
+getDataType(); // get data type constants
+```
+PNIString and PNIPointer have an extra method
+
+```php
+systemFree(); 
+```
+Free the memory which is malloced in C .
+Be carefull with such libraries as they may cause memory leak .
 
 ### Predefined constants
 
@@ -63,11 +94,9 @@ PNIDataType::INTEGER
 PNIDataType::LONG
 PNIDataType::FLOAT
 PNIDataType::DOUBLE
+PNIDataType::STRING
 PNIDataType::POINTER
 ```
-
-
-
 
 ## Examples
 
@@ -78,7 +107,7 @@ try {
     $pow = new PNIFunction(PNIDataType::DOUBLE, 'pow', 'libm.so.6');
     $a = new PNIDouble(2);
     $b = new PNIDouble(10);
-    $res = $pow($a, $b);
+    $res = $pow($a, $b); 
     var_dump($res);
 } catch (PNIException $e) {
 }
@@ -89,32 +118,15 @@ try {
 - 1.Write the C/C++ code
 
 ```C++
-// file pni_math.c
-#include<math.h>
-#include "php.h"
-
-/* 
- * double pow(double x, double y); 
- * every PNI function returns zval(php variable) , the paramters are in the args
- */
-zval *PNI_pow(zval **args, int argc) {
-    zval *tmp, *res;
-    double x,y,z;
-    tmp = args[0];     
-    x = Z_DVAL_P(tmp);  // get the double value via Z_DVAL_P
-    tmp = args[1];
-    y = Z_DVAL_P(tmp); // Why we write it like this instead of `y = Z_DVAL_P(args[1]);`? It's a C Trap.
-    
-    z = pow(x,y);    // Function pow is the target.
-    ALLOC_INIT_ZVAL(res);  //  It's essential to init return value unless the return value is NULL.
-    ZVAL_DOUBLE(res, z);   // Use ZVAL_DOUBLE to assign the result to the return variable，the data type is double.
-    return res;
+// file user_math.c
+u_int32_t sum(u_int32_t a, u_int32_t b) {
+    return a + b;
 }
 ```
 - 2.Create the shared library file and move it to the directory which `$LD_LIBRARY_PATH` contains.
 - 
 ```shell
-php-ni -lm -o libpnimath.so pni_math.c
+gcc -fPIC -shared -o libusermath.so user_math.c
 ```
 - 3.Create PHP code
 
@@ -122,27 +134,20 @@ php-ni -lm -o libpnimath.so pni_math.c
 // file testPni.php
 <?php
 try {
-    $pni = new PNI('libpnimath.so');
-    var_dump($pni->PNI_pow(2.0,6.0));
-    $noPni = new PNI('/unexisted/library.so');
-    var_dump($pni->unDefinedFunction(2.0,6.0));
+    $sum = new PNIFunction(PNIDataType::INTEGER, 'sum', 'libusermath.so');
+    $a = new PNIInteger(2);
+    $b = new PNIInteger(10);
+    $res = $sum($a, $b);
+    var_dump($res);
 } catch (PNIException $e) {
-    var_dump($e->getMessage());
-    var_dump($e->getTraceAsString());
 }
-
 ```
 - 4.Run the PHP script
 
 ```shell
 $ php testPni.php 
 ```
-
-the output as below
-
-```shell
-
-```
+$res is an object of PNIInteger, its value is 12.
 
 ## PNI Data Type Map
 

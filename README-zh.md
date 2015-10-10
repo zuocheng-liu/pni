@@ -118,7 +118,6 @@ u_int32_t sum(u_int32_t a, u_int32_t b) {
 }
 ```
 - 2.创建动态链接库，并把它放到 `$LD_LIBRARY_PATH` 包含的目录里
-- 
 ```shell
 gcc -fPIC -shared -o libusermath.so user_math.c
 ```
