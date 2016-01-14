@@ -1,3 +1,12 @@
+!config.m4
+!example
+!php_pni.h
+!pni.c  
+!README.md  
+!README-zh.md  
+!tests
+!doc
+
 # Compiled Object files
 *.slo
 *.lo

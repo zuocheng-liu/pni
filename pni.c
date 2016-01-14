@@ -32,6 +32,8 @@
 /* function variable and class property lables definination */
 #define PNI_DL_HANDLE_RES_NAME "DL Handle"
 #define MAX_PNI_FUNCTION_PARAMS 255
+#define MAX_PNI_FUNCTION_LONG_PARAMS 32
+#define MAX_PNI_FUNCTION_DOUBLE_PARAMS 8
 #define PNI_PROPERTY_DL_HANDLE_LABEL "_dlHandle"
 #define PNI_PROPERTY_LIBNAME_LABEL "_libName"
 #define PNI_PROPERTY_FUNCTIONNAME_LABEL "_functionName"
@@ -503,9 +505,9 @@ PHP_METHOD(PNIFunction, invoke) {
     zend_rsrc_list_entry *le, new_le;
     char * error_msg;
 
-    long long_param_list[MAX_PNI_FUNCTION_PARAMS];
+    long long_param_list[MAX_PNI_FUNCTION_LONG_PARAMS];
     int long_param_count;
-    double double_param_list[MAX_PNI_FUNCTION_PARAMS];
+    double double_param_list[MAX_PNI_FUNCTION_DOUBLE_PARAMS];
     int double_param_count;
     NATIVE_INTERFACE_SYMBOL nativeInterface;
     PNI_DATA_TYPE_ANY *value_p;                                    
@@ -696,6 +698,14 @@ static void trans_args_to_param_list(zval ***args,const int argc,
     zval *argObj;
     int i;
     for (i = 0; i < argc ; i++) {
+		/* Gcc only supports 8 double parameters */
+		if (double_offset > MAX_PNI_FUNCTION_DOUBLE_PARAMS) {
+			break;
+		}
+		/* PNI only supports 32 double parameters */
+		if (long_offset > MAX_PNI_FUNCTION_LONG_PARAMS) {
+			break;
+		}
         argObj = *(args[i]);
         zval_value = zend_read_property(Z_OBJCE_P(argObj), argObj, ZEND_STRL(PNI_PROPERTY_VALUE_LABEL), 0 TSRMLS_CC);       
         zval_data_type = zend_read_property(Z_OBJCE_P(argObj), argObj, ZEND_STRL(PNI_PROPERTY_DATA_TYPE_LABEL), 0 TSRMLS_CC);
