@@ -211,9 +211,11 @@ Contributions to PNI are highly appreciated either in the form of pull requests 
 ### Related links
 
 - [Source code](https://github.com/zuocheng-liu/pni)
+- [Engineering Note](http://it.zuocheng.net/engineer-note-pni-zh)
 
-### Author 
+### Contacts 
 
+- QQ Group : 297031218
 - Zuocheng Liu <zuocheng.liu@gmail.com>
 
 ### License

@@ -215,9 +215,11 @@ apachectl restart   // sapi mode
 ### 网址
 
 - [源代码](https://github.com/zuocheng-liu/pni)
+- [开发笔记](http://it.zuocheng.net/engineer-note-pni-zh)
 
-### 作者联系方式 
+### 联系方式 
 
+- QQ群 : 297031218  
 - Zuocheng Liu <zuocheng.liu@gmail.com>
 - [新浪微博](http://weibo.com/zuocheng1990)
 
