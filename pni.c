@@ -32,8 +32,8 @@
 /* function variable and class property lables definination */
 #define PNI_DL_HANDLE_RES_NAME "DL Handle"
 #define MAX_PNI_FUNCTION_PARAMS 255
-#define MAX_PNI_FUNCTION_LONG_PARAMS 32
-#define MAX_PNI_FUNCTION_DOUBLE_PARAMS 8
+#define MAX_PNI_FUNCTION_LONG_PARAMS 8
+#define MAX_PNI_FUNCTION_DOUBLE_PARAMS 6
 #define PNI_PROPERTY_DL_HANDLE_LABEL "_dlHandle"
 #define PNI_PROPERTY_LIBNAME_LABEL "_libName"
 #define PNI_PROPERTY_FUNCTIONNAME_LABEL "_functionName"
