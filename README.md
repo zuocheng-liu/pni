@@ -39,8 +39,6 @@ Data types and PNI framework are more simple.
 
 Increasing native interface has no effect on current PHP service.
 
-## Pitfalls
-
 ## Tutorial 
 
 ### Classes and methods
