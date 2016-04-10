@@ -64,9 +64,10 @@ $pow = new PNIFunction(PNIDataType::DOUBLE, 'pow', 'libm.so.6');
 - PNIString
 - PNIPointer
 
-所有数据类型类都继承PNIDataType抽象类，此抽象类包含两个共有方法
+所有数据类型类都继承PNIDataType抽象类，此抽象类包含3个共有方法
 ```php
 getValue(); // 获取值
+setValue($value); // 重新赋值
 getDataType(); // 获取数据类型
 ```
 PNIString 和 PNIPointer 中还额外包含一个接口

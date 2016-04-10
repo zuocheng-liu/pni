@@ -70,9 +70,10 @@ Data type class :
 - PNIString
 - PNIPointer
 
-All pni data type class are based on PNIDataType.It has two public methods :
+All pni data type class are based on PNIDataType.It has 3 public methods :
 ```php
 getValue();  // get Zend variable
+setValue($value);  // reassign variable
 getDataType(); // get data type constants
 ```
 PNIString and PNIPointer have an extra method

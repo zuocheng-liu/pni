@@ -105,6 +105,7 @@ PHP_METHOD(PNIFunction, __construct);
 PHP_METHOD(PNIFunction, invoke);                                      
 
 PHP_METHOD(PNIDataType, getValue);                                      
+PHP_METHOD(PNIDataType, setValue);                                      
 PHP_METHOD(PNIDataType, getDataType);                                      
 PHP_METHOD(PNIDataType, systemFree);                                      
 
@@ -152,8 +153,9 @@ const zend_function_entry pni_exception_functions[] = {
  */
 const zend_function_entry pni_data_type_functions[] = {
     PHP_ME(PNIDataType, getValue,       NULL, ZEND_ACC_PUBLIC) 
+    PHP_ME(PNIDataType, setValue,       NULL, ZEND_ACC_PUBLIC) 
     PHP_ME(PNIDataType, getDataType,    NULL, ZEND_ACC_PUBLIC) 
-    PHP_ME(PNIDataType, systemFree,       NULL, ZEND_ACC_PUBLIC) 
+    PHP_ME(PNIDataType, systemFree,     NULL, ZEND_ACC_PUBLIC) 
     PHP_FE_END 
 };
 /* }}} */
@@ -611,7 +613,25 @@ PHP_METHOD(PNIDataType, getValue) {
     RETURN_ZVAL(value, 1, 0);
 }
 
-/* {{{ proto public void PNIDataType::getValue()
+/* {{{ proto public void PNIDataType::setValue()
+ */
+PHP_METHOD(PNIDataType, setValue) {
+    pni_data_factory(ht, getThis() TSRMLS_CC);
+    RETURN_NULL();
+}
+
+/* {{{ proto public void PNI::__construct($libName)
+ *    Constructor. Throws an PNIException in case the given shared library does not exist */
+PHP_METHOD(PNIDataType, getDataType) {
+    zval * self;
+    zval * value;
+    self = getThis();
+    value = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DATA_TYPE_LABEL), 0 TSRMLS_CC);
+    RETURN_LONG(Z_LVAL_P(value));
+}
+/* }}} */
+
+/* {{{ proto public void PNIDataType::systemFree()
  */
 PHP_METHOD(PNIDataType, systemFree) {
     zval * self;
@@ -639,17 +659,6 @@ PHP_METHOD(PNIDataType, systemFree) {
 }
 
 
-/* }}} */
-
-/* {{{ proto public void PNI::__construct($libName)
- *    Constructor. Throws an PNIException in case the given shared library does not exist */
-PHP_METHOD(PNIDataType, getDataType) {
-    zval * self;
-    zval * value;
-    self = getThis();
-    value = zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DATA_TYPE_LABEL), 0 TSRMLS_CC);
-    RETURN_LONG(Z_LVAL_P(value));
-}
 /* }}} */
 
 /* get the dl handle, if not exists, create and persist it */
