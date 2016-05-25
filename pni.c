@@ -27,7 +27,7 @@
 #include "ext/standard/info.h"
 #include "php_pni.h"
 #include <dlfcn.h>
-
+#include "zend_exceptions.h"
 
 /* function variable and class property lables definination */
 #define PNI_DL_HANDLE_RES_NAME "DL Handle"
@@ -653,7 +653,6 @@ PHP_METHOD(PNIDataType, systemFree) {
             spprintf(&error_msg, 0, "Parameter error");
             zend_throw_exception(pni_exception_ptr, error_msg, 0 TSRMLS_CC);
             efree(error_msg);
-            return FAILURE;
     }
     RETURN_NULL();
 }
