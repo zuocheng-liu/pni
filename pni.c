@@ -72,7 +72,7 @@ ZEND_END_ARG_INFO()
 static void pni_dl_handle_persist_dtor(zend_resource *rsrcg);
 static void trans_args_to_param_list(zval[], const int, long *, int *, double *, int *);
 static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL, const long const*, const int ,const double const*, const int);
-static void assign_value_to_pni_return_data(int pni_data_type, PNI_DATA_TYPE_ANY, zval *);
+static void assign_value_to_pni_return_data(zend_long pni_data_type, PNI_DATA_TYPE_ANY, zval *);
 static int get_persisted_dl_handle (char *, DL_HANDLE_TYPE*);
 static inline int pni_data_factory(zend_execute_data *execute_data, zval *g);
 /* asm debug mark */
@@ -217,7 +217,9 @@ PHP_MINIT_FUNCTION(pni) {
 	/* class PNIFunction */
 	INIT_CLASS_ENTRY(pni, "PNIFunction", pni_function_functions);
 	pni_function_ptr = zend_register_internal_class_ex(&pni, NULL);
-	//zend_declare_property(pni_function_ptr, PNI_PROPERTY_DL_HANDLE_LABEL, sizeof(PNI_PROPERTY_DL_HANDLE_LABEL) - 1, NULL, ZEND_ACC_PROTECTED);
+	zval property;
+	zend_declare_property(pni_function_ptr, PNI_PROPERTY_DL_HANDLE_LABEL, sizeof(PNI_PROPERTY_DL_HANDLE_LABEL) - 1, &property, ZEND_ACC_PROTECTED);
+	zend_declare_property_string(pni_function_ptr, PNI_PROPERTY_LIBNAME_LABEL, sizeof(PNI_PROPERTY_LIBNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED);
 	zend_declare_property_string(pni_function_ptr, PNI_PROPERTY_FUNCTIONNAME_LABEL, sizeof(PNI_PROPERTY_FUNCTIONNAME_LABEL) - 1, "", ZEND_ACC_PROTECTED);
 	zend_declare_property_long(pni_function_ptr, PNI_PROPERTY_RETURN_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL) - 1, 0, ZEND_ACC_PROTECTED);
 
@@ -335,7 +337,7 @@ PHP_FUNCTION(get_pni_version) {
 /* {{{ proto public void PNIFunction::__construct($returnDataType, $functionName, $libName)
  *    Constructor. Throws an PNIException in case the given shared library does not exist */
 PHP_METHOD(PNIFunction, __construct) {
-	int data_type;
+	zend_long data_type;
 	char *lib_name;
 	int lib_name_len;
 	char *function_name;
@@ -349,7 +351,6 @@ PHP_METHOD(PNIFunction, __construct) {
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "lss", &data_type, &function_name, &function_name_len, &lib_name, &lib_name_len) == FAILURE) {
 		WRONG_PARAM_COUNT;
 	}
-
 	/* get the persisted dl handle */
 	if ( FAILURE == get_persisted_dl_handle (lib_name, &dl_handle)) {
 		return;
@@ -374,8 +375,8 @@ PHP_METHOD(PNIFunction, __construct) {
  *   Call the native function.Return PNI value. Throws an PNIException. */
 PHP_METHOD(PNIFunction, invoke) {
 	PNI_DATA_TYPE_ANY pni_return_value;
-	int pni_return_data_type;
-	zval *self,  *lib_name, *function_name, *return_data_type, *res, *property_dl_handle;
+	zend_long pni_return_data_type;
+	zval *self, *lib_name, *function_name, *return_data_type, *res, *property_dl_handle;
 
 	zend_resource *le, new_le;
 	char * error_msg;
@@ -405,7 +406,7 @@ PHP_METHOD(PNIFunction, invoke) {
 	}
 	/* seek dynamic library function symbol */
 	nativeInterface = (NATIVE_INTERFACE_SYMBOL)dlsym(dl_handle, Z_STRVAL_P(function_name));
-	if (!nativeInterface) {
+	if (NULL == nativeInterface) {
 		spprintf(&error_msg, 0, "Dlsym %s error (%s).", Z_STRVAL_P(function_name), dlerror());
 		zend_throw_exception(pni_exception_ptr, error_msg, 0);
 		efree(error_msg);
@@ -565,8 +566,8 @@ static int get_persisted_dl_handle (char *lib_name, DL_HANDLE_TYPE *dl_handle_pt
 
 /* trans the parameters value to c array list */
 static void trans_args_to_param_list(zval args[],const int argc, 
-		long * long_param_list, int *long_param_count, 
-		double * double_param_list, int *double_param_count) {
+		long *long_param_list, int *long_param_count, 
+		double *double_param_list, int *double_param_count) {
 
 	int long_offset = 0;
 	int double_offset = 0;
@@ -619,8 +620,14 @@ static void trans_args_to_param_list(zval args[],const int argc,
 
 /* release the dl resource */
 static void pni_dl_handle_persist_dtor(zend_resource *rsrcg) {
-	DL_HANDLE_TYPE *dlHandle = (void *) rsrcg->ptr;
-	dlclose(dlHandle);
+	if (NULL == rsrcg) {
+		return;
+	}
+	DL_HANDLE_TYPE dl_handle = (DL_HANDLE_TYPE)rsrcg->ptr;
+	if (NULL == dl_handle) {
+		return;
+	}
+	dlclose(dl_handle);
 }
 
 /* {{{ call the interface in the library */
@@ -709,17 +716,14 @@ static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL interface
 /* }}} */
 
 /* {{{ return the value according to the return data type */
-static void assign_value_to_pni_return_data(int pni_data_type, PNI_DATA_TYPE_ANY value, zval *object) {
+static void assign_value_to_pni_return_data(zend_long pni_data_type, PNI_DATA_TYPE_ANY value, zval *object) {
 	PNI_DATA_TYPE_ANY *value_p;
 	double *double_value_p;
-	if (!object) {
-		ALLOC_ZVAL(object);
-	}
 	if (PNI_DATA_TYPE_VOID == pni_data_type) {
 		ZVAL_NULL(object);
 		return;
 	}
-
+	//php_error(E_NOTICE, "Here:%d", ++i);
 	//Z_TYPE_P(object) = IS_OBJECT;
 	switch (pni_data_type) {                                
 		case PNI_DATA_TYPE_CHAR :
@@ -758,8 +762,8 @@ static void assign_value_to_pni_return_data(int pni_data_type, PNI_DATA_TYPE_ANY
 			ZVAL_NULL(object);
 			return;
 	}    
-	Z_SET_REFCOUNT_P(object, 1);
-	Z_SET_ISREF_P(object);
+	//Z_SET_REFCOUNT_P(object, 1);
+	//Z_SET_ISREF_P(object);
 }
 /* }}}*/
 
@@ -769,7 +773,7 @@ static inline int pni_data_factory(zend_execute_data *execute_data, zval *object
 	zval *value;
 	zval rv;
 	zval *property_data_type = zend_read_property(Z_OBJCE_P(object), object, PNI_PROPERTY_DATA_TYPE_LABEL, sizeof(PNI_PROPERTY_DATA_TYPE_LABEL)-1, 1, &rv);
-	int pni_data_type = Z_LVAL_P(property_data_type);
+	zend_long pni_data_type = Z_LVAL_P(property_data_type);
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "z", &value) == FAILURE) {
 		spprintf(&error_msg, 0, "Parameter error");
