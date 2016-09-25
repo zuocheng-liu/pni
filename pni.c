@@ -1,19 +1,19 @@
 /*
-  +----------------------------------------------------------------------+
-  | PHP Version 5                                                        |
-  +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2014 The PHP Group                                |
-  +----------------------------------------------------------------------+
-  | This source file is subject to version 3.01 of the PHP license,      |
-  | that is bundled with this package in the file LICENSE, and is        |
-  | available through the world-wide-web at the following url:           |
-  | http://www.php.net/license/3_01.txt                                  |
-  | If you did not receive a copy of the PHP license and are unable to   |
-  | obtain it through the world-wide-web, please send a note to          |
-  | license@php.net so we can mail you a copy immediately.               |
-  +----------------------------------------------------------------------+
-  | Author: Zuocheng Liu <zuocheng.liu@gmail.com>                        |
-  +----------------------------------------------------------------------+
+   +----------------------------------------------------------------------+
+   | PHP Version 7                                                        |
+   +----------------------------------------------------------------------+
+   | Copyright (c) 1997-2016 The PHP Group                                |
+   +----------------------------------------------------------------------+
+   | This source file is subject to version 3.01 of the PHP license,      |
+   | that is bundled with this package in the file LICENSE, and is        |
+   | available through the world-wide-web at the following url:           |
+   | http://www.php.net/license/3_01.txt                                  |
+   | If you did not receive a copy of the PHP license and are unable to   |
+   | obtain it through the world-wide-web, please send a note to          |
+   | license@php.net so we can mail you a copy immediately.               |
+   +----------------------------------------------------------------------+
+   | Author: Zuocheng Liu <zuocheng.liu@gmail.com>                        |
+   +----------------------------------------------------------------------+
 */
 
 /* $Id$ */
@@ -94,7 +94,6 @@ static zend_class_entry *pni_pointer_ptr;
 ZEND_DECLARE_MODULE_GLOBALS(pni)
 /* True global resources - no need for thread safety here */
 static int le_dl_handle_persist;
-
 
 /* PNI functions */
 PHP_FUNCTION(get_pni_version);
@@ -234,7 +233,6 @@ static void php_pni_init_globals(zend_pni_globals *pni_globals)
 */
 /* }}} */
 
-
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(pni) {
@@ -355,7 +353,6 @@ PHP_MINFO_FUNCTION(pni)
     */
 }
 /* }}} */
-
 
 /* Remove the following function when you have successfully modified config.m4
    so that your module can be compiled into PHP, it exists only for testing
