@@ -37,6 +37,51 @@ PHP扩展更改后上线，需要重启PHP服务，这是有一定风险的。
 
 使用PNI，可以更灵活地使用本地类库。
 
+## 如何安装 
+
+### 环境要求
+
+* PHP 5.3 以上版本, PHP 7.0
+* 必须是GCC编译器
+* CPU 必须是x86_64架构或被兼容的架构
+
+### 安装步骤
+
+- 下载
+
+```shell
+git clone https://github.com/zuocheng-liu/pni.git
+```
+
+- 依据PHP的版本，切换到合适的分支
+
+```shell
+git checkout for_php_5  # 适用于PHP5.x
+git checkout for_php_7  # 适用于PHP7.x
+```
+- 编译和安装
+
+```shell
+cd <src-pni>
+phpize
+./configure
+make && make install
+```
+- 配置PHP，使其生效
+
+把下面一行添加到 php.ini
+
+```shell
+extension=pni.so;
+```
+- 重启PHP服务
+
+```bash
+service php-fpm restart  // cgi mode
+apachectl restart   // sapi mode 
+// do nothing in cli mode
+```
+
 ## 使用手册 
 
 ### 类和方法列表
@@ -168,43 +213,6 @@ PNIDouble 和 PNIFloat 也是等效的,因为PHP只有64位浮点。如果调用
 - 对于在动态链接库中申请的资源，要及时释放
 - 目前PNI还不支持对复杂数据类型的操作，比如struct，C++的类等
 
-## 如何安装 
-
-### 环境要求
-
-* PHP 5.3 以上版本, 但不包含PHP 7 
-* 必须是GCC编译器
-* CPU 必须是x86_64架构或被兼容的架构
-
-### 安装步骤
-
-- 下载
-
-```shell
-git clone https://github.com/zuocheng-liu/pni.git
-```
-- 编译和安装
-
-```shell
-cd <src-pni>
-phpize
-./configure
-make && make install
-```
-- 配置PHP，使其生效
-
-把下面一行添加到 php.ini
-
-```shell
-extension=pni.so;
-```
-- 重启PHP服务
-
-```bash
-service php-fpm restart  // cgi mode
-apachectl restart   // sapi mode 
-// do nothing in cli mode
-```
 ## 开发
 
 ### 提出建议和提交Bug
