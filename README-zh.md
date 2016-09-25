@@ -172,7 +172,7 @@ PNIDouble 和 PNIFloat 也是等效的,因为PHP只有64位浮点。如果调用
 
 ### 环境要求
 
-* PHP 5.3 以上版本, 但不包含PHP 7 
+* PHP 5.3 以上版本, PHP 7.0
 * 必须是GCC编译器
 * CPU 必须是x86_64架构或被兼容的架构
 
@@ -182,6 +182,13 @@ PNIDouble 和 PNIFloat 也是等效的,因为PHP只有64位浮点。如果调用
 
 ```shell
 git clone https://github.com/zuocheng-liu/pni.git
+```
+
+- 依据PHP的版本，切换到合适的分支
+
+```shell
+git checkout for_php_5  # 适用于PHP5.x
+git checkout for_php_7  # 适用于PHP7.x
 ```
 - 编译和安装
 
