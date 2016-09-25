@@ -166,7 +166,7 @@ Does PNI really make sense? Yes. Believe me.  PNI has less data types than C,but
 
 ### Requirements
 
-* PHP 5.3 or higher, PHP 7 unsupported
+* PHP 5.3 or higher, includes PHP 7.0 
 * GCC compiler
 * Architecture x86_64
 
@@ -176,6 +176,13 @@ Does PNI really make sense? Yes. Believe me.  PNI has less data types than C,but
 
 ```shell
 git clone https://github.com/zuocheng-liu/pni.git
+```
+
+- Switch to the appropriate branch according to the version of php
+
+```shell
+git checkout for_php_5  # if you installed php 5.x , exec this line.
+git checkout for_php_7  # if you installed php 7.x , exec this line.
 ```
 - Complie the pni extension code and install
 
