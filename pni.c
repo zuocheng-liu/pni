@@ -154,6 +154,8 @@ const zend_function_entry pni_data_type_functions[] = {
 };
 /* }}} */
 
+/* {{{ pni_data_type_object_class_functions[]
+ */
 const zend_function_entry pni_char_functions[] = {
 	PHP_ME(PNIChar,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
 	PHP_FE_END 
@@ -182,6 +184,7 @@ const zend_function_entry pni_pointer_functions[] = {
 	PHP_ME(PNIPointer,     __construct,    NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR) 
 	PHP_FE_END 
 };
+/* }}} */
 
 /* {{{ pni_module_entry
  */
@@ -350,7 +353,7 @@ PHP_METHOD(PNIFunction, __construct) {
 	}
 	/* get the persisted dl handle */
 	DL_HANDLE_TYPE dl_handle;
-	if ( FAILURE == get_persisted_dl_handle (lib_name, &dl_handle)) {
+	if ( FAILURE == get_persisted_dl_handle(lib_name, &dl_handle)) {
 		return;
 	} 
 	/* registe dl handle resource */
@@ -366,6 +369,7 @@ PHP_METHOD(PNIFunction, __construct) {
 	zend_update_property_long(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL), data_type);
 	/* save the dl handle resource to private property */   
 	zend_update_property(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_DL_HANDLE_LABEL), &property_dl_handle);
+	zval_ptr_dtor(&property_dl_handle);
 }
 /* }}} */
 
@@ -375,7 +379,12 @@ PHP_METHOD(PNIFunction, __destruct) {
 	zval *self, rv;
 	self = getThis();
 	zval *property_dl_handle = zend_read_property(Z_OBJCE_P(self), self, PNI_PROPERTY_DL_HANDLE_LABEL, sizeof(PNI_PROPERTY_DL_HANDLE_LABEL)-1, 1, &rv);
-	zend_list_close(Z_RES_P(property_dl_handle));
+	zend_resource *le = Z_RES_P(property_dl_handle);
+	zval_ptr_dtor(property_dl_handle);
+	if (NULL == le) {
+		return;
+	}
+	zend_list_close(le);
 }
 /* }}} */
 
@@ -558,8 +567,8 @@ PHP_METHOD(PNIDataType, systemFree) {
 static int get_persisted_dl_handle (char *lib_name, DL_HANDLE_TYPE *dl_handle_ptr) {
 	zend_string *hash_key = strpprintf(0, "pni_dl_handle_%s", lib_name);
 	*dl_handle_ptr = zend_hash_find_ptr(&EG(persistent_list), hash_key);
+	zend_string_free(hash_key);
 	if (NULL != *dl_handle_ptr) {
-		zend_string_free(hash_key);
 		return SUCCESS;
 	}
 	/* init the dl handle resource */
@@ -569,12 +578,10 @@ static int get_persisted_dl_handle (char *lib_name, DL_HANDLE_TYPE *dl_handle_pt
 		spprintf(&error_msg, 0, "%s,  dl handle resource is not created.", dlerror());
 		zend_throw_exception(pni_exception_ptr, error_msg, 0);
 		efree(error_msg);
-		zend_string_free(hash_key);
 		return FAILURE;
 	}
 	/* persist dl handle */
 	zend_hash_add_new_ptr(&EG(persistent_list), hash_key, *dl_handle_ptr);
-	zend_string_free(hash_key);
 	return SUCCESS;
 }
 
@@ -737,7 +744,6 @@ static void assign_value_to_pni_return_data(zend_long pni_data_type, PNI_DATA_TY
 		ZVAL_NULL(object);
 		return;
 	}
-	//php_error(E_NOTICE, "Here:%d", ++i);
 	//Z_TYPE_P(object) = IS_OBJECT;
 	switch (pni_data_type) {                                
 		case PNI_DATA_TYPE_CHAR :

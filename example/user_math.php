@@ -9,12 +9,17 @@ try {
     $res = $sum($a, $b);
     var_dump($res);
 
-    $sum = new PNIFunction(PNIDataType::LONG, 'mul', $libPath);
+/*
+    $mul = new PNIFunction(PNIDataType::LONG, 'mul', $libPath);
     $a = new PNILONG(100);
     $b = new PNILONG(10);
+    $res = $mul($a, $b);
+    var_dump($res);
     $res = $sum($a, $b);
     var_dump($res);
-
+    $res = $mul($a, $b);
+    var_dump($res);
+    */
 } catch (PNIException $e) {
     var_dump($e->getMessage());
     var_dump($e->getTraceAsString());
