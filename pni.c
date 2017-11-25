@@ -351,7 +351,7 @@ PHP_METHOD(PNIFunction, __construct) {
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "lss", &data_type, &function_name, &function_name_len, &lib_name, &lib_name_len) == FAILURE) {
 		WRONG_PARAM_COUNT;
 	}
-	zend_error(E_WARNING, "return data type:%d|function_name:%s %d|libname:%s %d", data_type, function_name, function_name_len, lib_name, lib_name_len);
+	//zend_error(E_WARNING, "return data type:%d|function_name:%s %d|libname:%s %d", data_type, function_name, function_name_len, lib_name, lib_name_len);
 	/* get the persisted dl handle */
 	DL_HANDLE_TYPE dl_handle;
 	if ( FAILURE == get_persisted_dl_handle(lib_name, &dl_handle)) {
