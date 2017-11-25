@@ -342,15 +342,16 @@ PHP_FUNCTION(get_pni_version) {
 /* {{{ proto public void PNIFunction::__construct($returnDataType, $functionName, $libName)
  *    Constructor. Throws an PNIException in case the given shared library does not exist */
 PHP_METHOD(PNIFunction, __construct) {
-	zend_long data_type;
 	char *lib_name;
-	int lib_name_len;
+	size_t lib_name_len;
 	char *function_name;
-	int function_name_len;
+	size_t function_name_len;
+	zend_long data_type;
 	/* get the parameter $libName */
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "lss", &data_type, &function_name, &function_name_len, &lib_name, &lib_name_len) == FAILURE) {
 		WRONG_PARAM_COUNT;
 	}
+	zend_error(E_WARNING, "return data type:%d|function_name:%s %d|libname:%s %d", data_type, function_name, function_name_len, lib_name, lib_name_len);
 	/* get the persisted dl handle */
 	DL_HANDLE_TYPE dl_handle;
 	if ( FAILURE == get_persisted_dl_handle(lib_name, &dl_handle)) {
