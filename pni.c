@@ -750,6 +750,9 @@ static void trans_args_to_param_list(zval ***args,const int argc,
 /* release the dl resource */
 static void pni_dl_handle_persist_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
     void *dlHandle = (void *) rsrc->ptr;
+	if (NULL == dlHandle) {
+		return;
+	}
     dlclose(dlHandle);
 }
 
