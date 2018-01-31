@@ -1,7 +1,6 @@
 <?php
 try {
-    $libPath =  dirname(__FILE__) . '/libm.so.6';
-    echo $libPath;
+    $libPath =  'libm.so.6';
     $pow = new PNIFunction(PNIDataType::DOUBLE, 'pow', $libPath);
     $a = new PNIDouble(2);
     $b = new PNIDouble(10);

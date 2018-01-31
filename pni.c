@@ -75,6 +75,7 @@ static PNI_DATA_TYPE_ANY call_native_interface(NATIVE_INTERFACE_SYMBOL, const lo
 static void assign_value_to_pni_return_data(zend_long pni_data_type, PNI_DATA_TYPE_ANY, zval *);
 static int get_persisted_dl_handle (char *, DL_HANDLE_TYPE*);
 static inline int pni_data_factory(zend_execute_data *execute_data, zval *g);
+static void dl_plist_entry_destructor(zval *el);
 /* asm debug mark */
 
 /* class entry declare */
@@ -93,7 +94,7 @@ static zend_class_entry *pni_pointer_ptr;
 ZEND_DECLARE_MODULE_GLOBALS(pni)
 /* True global resources - no need for thread safety here */
 static int le_dl_handle_persist;
-
+static HashTable dl_persistent_list;
 
 /* PNI functions */
 PHP_FUNCTION(get_pni_version);
@@ -217,6 +218,7 @@ PHP_MINIT_FUNCTION(pni) {
 	/* If you have INI entries, uncomment these lines 
 	   REGISTER_INI_ENTRIES();
 	 */
+	zend_hash_init_ex(&dl_persistent_list, 8, NULL, dl_plist_entry_destructor, 1, 0);
 	le_dl_handle_persist = zend_register_list_destructors_ex(NULL, pni_dl_handle_persist_dtor, PNI_DL_HANDLE_RES_NAME, module_number);
 
 	/* class PNIFunction */
@@ -291,6 +293,7 @@ PHP_MSHUTDOWN_FUNCTION(pni) {
 	/* uncomment this line if you have INI entries
 	   UNREGISTER_INI_ENTRIES();
 	 */
+	zend_hash_graceful_destroy(&dl_persistent_list);
 	return SUCCESS;
 }
 /* }}} */
@@ -347,6 +350,7 @@ PHP_METHOD(PNIFunction, __construct) {
 	char *function_name;
 	size_t function_name_len;
 	zend_long data_type;
+	zval property_dl_handle;
 	/* get the parameter $libName */
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "lss", &data_type, &function_name, &function_name_len, &lib_name, &lib_name_len) == FAILURE) {
 		WRONG_PARAM_COUNT;
@@ -357,10 +361,11 @@ PHP_METHOD(PNIFunction, __construct) {
 	if ( FAILURE == get_persisted_dl_handle(lib_name, &dl_handle)) {
 		return;
 	} 
-	/* registe dl handle resource */
+	//zend_error(E_WARNING, "construct get dl handler(%llu)", (uint64_t)dl_handle);
+	
 	zend_resource *le = zend_register_resource(dl_handle, le_dl_handle_persist);
-	zval property_dl_handle;
 	ZVAL_RES(&property_dl_handle, le);
+	//zend_error(E_WARNING, "construct property_dl_handle gc_c(%ld)", (int64_t)GC_REFCOUNT(Z_COUNTED(property_dl_handle)));
 	zval *self = getThis();
 	/* save the libname to private property */
 	zend_update_property_stringl(Z_OBJCE_P(self), self, ZEND_STRL(PNI_PROPERTY_LIBNAME_LABEL), lib_name, lib_name_len);
@@ -382,6 +387,9 @@ PHP_METHOD(PNIFunction, __destruct) {
 	zval *property_dl_handle = zend_read_property(Z_OBJCE_P(self), self, PNI_PROPERTY_DL_HANDLE_LABEL, sizeof(PNI_PROPERTY_DL_HANDLE_LABEL)-1, 1, &rv);
 	zend_resource *le = Z_RES_P(property_dl_handle);
 	zval_ptr_dtor(property_dl_handle);
+	
+	//zend_error(E_WARNING, "destruct property_dl_handle gc_c(%ld)", (int64_t)GC_REFCOUNT(Z_COUNTED(*property_dl_handle)));
+	//zend_error(E_WARNING, "destruct dl handler res gc_c(%ld)", (int64_t)GC_REFCOUNT(le));
 	if (NULL == le) {
 		return;
 	}
@@ -414,6 +422,9 @@ PHP_METHOD(PNIFunction, invoke) {
 	function_name = zend_read_property(Z_OBJCE_P(self), self, PNI_PROPERTY_FUNCTIONNAME_LABEL,sizeof(PNI_PROPERTY_FUNCTIONNAME_LABEL)-1, 1, &rv1);
 	return_data_type = zend_read_property(Z_OBJCE_P(self), self, PNI_PROPERTY_RETURN_DATA_TYPE_LABEL,sizeof(PNI_PROPERTY_RETURN_DATA_TYPE_LABEL)-1, 1, &rv2);
 	property_dl_handle = zend_read_property(Z_OBJCE_P(self), self, PNI_PROPERTY_DL_HANDLE_LABEL, sizeof(PNI_PROPERTY_DL_HANDLE_LABEL)-1, 1, &rv3);
+	
+	//zend_error(E_WARNING, "invoke property_dl_handle gc_c(%ld)", (int64_t)GC_REFCOUNT(Z_COUNTED(*property_dl_handle)));
+	//zend_error(E_WARNING, "invoke dl handler gc_c(%ld)", (int64_t)GC_REFCOUNT(Z_RES_P(property_dl_handle)));
 
 	DL_HANDLE_TYPE dl_handle = NULL;
 	dl_handle = zend_fetch_resource(Z_RES_P(property_dl_handle), PNI_DL_HANDLE_RES_NAME, le_dl_handle_persist);
@@ -567,7 +578,7 @@ PHP_METHOD(PNIDataType, systemFree) {
 /* get the dl handle, if not exists, create and persist it */
 static int get_persisted_dl_handle (char *lib_name, DL_HANDLE_TYPE *dl_handle_ptr) {
 	zend_string *hash_key = strpprintf(0, "pni_dl_handle_%s", lib_name);
-	*dl_handle_ptr = zend_hash_find_ptr(&EG(persistent_list), hash_key);
+	*dl_handle_ptr = zend_hash_find_ptr(&dl_persistent_list, hash_key);
 	zend_string_free(hash_key);
 	if (NULL != *dl_handle_ptr) {
 		return SUCCESS;
@@ -582,7 +593,7 @@ static int get_persisted_dl_handle (char *lib_name, DL_HANDLE_TYPE *dl_handle_pt
 		return FAILURE;
 	}
 	/* persist dl handle */
-	zend_hash_add_new_ptr(&EG(persistent_list), hash_key, *dl_handle_ptr);
+	zend_hash_add_new_ptr(&dl_persistent_list, hash_key, *dl_handle_ptr);
 	return SUCCESS;
 }
 
@@ -826,6 +837,21 @@ static inline int pni_data_factory(zend_execute_data *execute_data, zval *object
 	return SUCCESS;
 }
 /* }}}*/
+
+static void dl_plist_entry_destructor(zval *el) {
+	if (NULL == el) {
+		return;
+	}
+	if (Z_TYPE_INFO_P(el) != IS_PTR) {
+		return;
+	}
+	DL_HANDLE_TYPE dl_handle = (DL_HANDLE_TYPE)(Z_PTR_P(el));
+	if (NULL == dl_handle) {
+		return;
+	}
+	// zend_error(E_WARNING, "dl_plist_entry_destructor:%ld", (uint64_t)dl_handle);
+	dlclose(dl_handle);
+}
 
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
    unfold functions in source code. See the corresponding marks just before 
